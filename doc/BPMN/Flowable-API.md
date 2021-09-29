@@ -146,3 +146,99 @@ logger.info("Found " + executions.size() + " executions");
 
 对于像Flowable这样的BPM引擎来说，核心是需要人类用户操作的任务。所有任务相关的东西都在 `TaskService` 中被分组：
 
+* 查询分派给用户或组的任务
+
+查询分派给用户的任务
+
+```xml
+<userTask id="holidayApprovedTask" name="Holiday approved" flowable:assignee="${employee}" />
+```
+
+```java
+List<Task> taskList = taskService.createTaskQuery().taskAssignee(employee).list();
+```
+
+查询分派给组的任务
+
+```xml
+<userTask id="approveTask" name="Approve or reject request" flowable:candidateGroups="managers"/>
+```
+
+```java
+List<Task> tasks = taskService.createTaskQuery().taskCandidateGroup("managers").list();
+```
+
+* 创建独立运行(standalone)任务。这是一种没有关联到流程实例的任务。
+
+// TODO: 待补充使用示例
+
+* 决定任务的执行用户(assignee)，或者将用户通过某种方式与任务关联。
+
+// TODO: 待补充使用示例
+
+* 认领(claim)与完成(complete)任务。认领是指某人决定成为任务的执行用户，也即他将会完成这个任务。完成任务是指“做这个任务要求的工作”，通常是填写某个表单。
+
+// TODO: 待补充使用示例
+
+`IdentityService` 用于管理（创建，更新，删除，查询……）组与用户。请注意，Flowable实际上在运行时并不做任何用户检查。例如任务可以分派给任何用户，而引擎并不会验证系统中是否存在该用户。这是因为Flowable有时要与LDAP、Active Directory等服务结合使用。
+
+// TODO: 待补充使用示例
+
+`FormService` 是可选择的。也就是说Flowable没有它也能很好地运行，而不必牺牲任何功能。这个服务引入了开始表单(start form)与任务表单(task form)的概念。 开始表单是在流程实例启动前显示的表单，而任务表单是用户完成任务时显示的表单。Flowable可以在BPMN 2.0流程定义中定义这些表单。 `FormService` 通过简单的方式暴露这些数据。表单不一定要嵌入流程定义，因此这个服务是可选的。
+
+// TODO: 待补充使用示例
+
+`HistoryService` 暴露Flowable引擎收集的所有历史数据。当执行流程时，引擎会保存许多数据（可配置），例如流程实例启动时间、谁在执行哪个任务、完成任务花费的事件、每个流程实例的执行路径，等等。这个service主要提供查询这些数据的能力。
+
+```java
+HistoryService historyService = processEngine.getHistoryService();
+List<HistoricActivityInstance> activities =
+                historyService.createHistoricActivityInstanceQuery()
+                        .processInstanceId(processInstance.getId())
+                        .finished()
+                        .orderByHistoricActivityInstanceEndTime().asc()
+                        .list();
+
+for (HistoricActivityInstance activity : activities) {
+    logger.info(activity.getActivityId() + " took "
+                    + activity.getDurationInMillis() + " milliseconds");
+}
+```
+
+`ManagementService` 通常不在用Flowable编写用户应用时使用。它可以读取数据库表与表原始数据的信息，也提供了对作业(job)的查询与管理操作。Flowable中很多地方都使用作业，例如定时器(timer)，异步操作(asynchronous continuation)，延时暂停/激活(delayed suspension/activation)等等。
+
+// TODO: 待补充使用示例
+
+DynamicBpmnService可用于修改流程定义中的部分内容，而不需要重新部署它。例如可以修改流程定义中一个用户任务的办理人设置，或者修改一个服务任务中的类名。
+
+// TODO: 待补充使用示例
+
+### 异常策略
+
+flowable的异常基类是 `org.flowable.common.engine.api.FlowableException` ，这是一个免检异常：
+
+![Snipaste_2021-09-29_11-45-52.png](../../img/BPMN/Snipaste_2021-09-29_11-45-52.png)
+
+它大概有以下子类：
+
+![Snipaste_2021-09-29_11-48-45.png](../../img/BPMN/Snipaste_2021-09-29_11-48-45.png)
+
+### 查询API
+
+从引擎中查询数据有两种方式：
+
+* 查询API
+
+```java
+List<Task> tasks = taskService.createTaskQuery()
+    .taskAssignee("kermit")
+    .processVariableValueEquals("orderId", "0815")
+    .orderByDueDate().asc()
+    .list();
+```
+
+上面是使用查询API的一个例子，这里查询的所有条件都用AND连接。
+
+
+
+* 原生(native)查询
