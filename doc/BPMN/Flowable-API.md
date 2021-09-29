@@ -207,6 +207,13 @@ for (HistoricActivityInstance activity : activities) {
 
 `ManagementService` 通常不在用Flowable编写用户应用时使用。它可以读取数据库表与表原始数据的信息，也提供了对作业(job)的查询与管理操作。Flowable中很多地方都使用作业，例如定时器(timer)，异步操作(asynchronous continuation)，延时暂停/激活(delayed suspension/activation)等等。
 
+```java
+// 使用ManagementService获取数据库表信息
+ManagementService managementService = processEngine.getManagementService();
+String tableName = managementService.getTableName(Task.class);
+logger.info("Task's tableName is " + tableName);
+```
+
 // TODO: 待补充使用示例
 
 DynamicBpmnService可用于修改流程定义中的部分内容，而不需要重新部署它。例如可以修改流程定义中一个用户任务的办理人设置，或者修改一个服务任务中的类名。
@@ -239,6 +246,167 @@ List<Task> tasks = taskService.createTaskQuery()
 
 上面是使用查询API的一个例子，这里查询的所有条件都用AND连接。
 
-
-
 * 原生(native)查询
+
+有时候你可能更复杂的查询，比如用OR连接查询条件，或者使用查询API不能满足你的需求，这时你可以使用原生查询。
+
+返回类型由使用的查询对象决定，数据会映射到正确的对象中（ `Task` 、 `ProcessInstance` 、 `Execution` ，等等）。查询在数据库中进行，因此需要使用数据库中定义的表名与列名。这需要你对内部数据结构有所了解，因此建议小心使用原生查询。数据库表名可以通过API读取，这样可以将依赖关系减到最小。
+
+```java
+List<Task> nativeQueryTasks = taskService.createNativeTaskQuery().sql("select * from " + tableName).list();
+logger.info("The whole application has " + nativeQueryTasks.size() + " task(s)");
+```
+
+### 变量
+
+流程实例在执行时，需要使用一些数据，在flowable中，这些数据被称作变量，并被保存在数据库中。
+
+流程实例、用户任务及执行都可以持有变量，流程实例可以持有任意数量的变量，每个变量都存储在表名为 `ACT_RU_VARIABLE` 的表中。
+
+`RuntimeService` 所有的 `startProcessInstanceXXX` 方法都有一个可选参数，用于在流程实例创建及启动时设置变量。
+
+```java
+Map<String, Object> variables = new HashMap<String, Object>();
+variables.put("employee", employee);
+variables.put("nrOfHolidays", nrOfHolidays);
+variables.put("description", description);
+// 执行流程实例
+ProcessInstance processInstance =
+                runtimeService.startProcessInstanceByKey("holidayRequest", variables);
+```
+
+![Snipaste_2021-09-29_14-17-00.png](../../img/BPMN/Snipaste_2021-09-29_14-17-00.png)
+
+当然也可以通过 `RuntimeService` 的一些方法给执行设置变量：
+
+![Snipaste_2021-09-29_14-18-49.png](../../img/BPMN/Snipaste_2021-09-29_14-18-49.png)
+
+流程实例由一颗执行的树(tree of executions)组成，给某个执行设置的局部变量只在该执行中可见，对执行树的上层不可见，这可以用于数据不暴露给流程实例其它执行的情况或者变量在流程实例的不同路径有不同的值的情况。
+
+// TODO: 待补充使用示例
+
+在 `TaskService` 中有一些方法可以获取变量：
+
+![Snipaste_2021-09-29_14-28-43.png](../../img/BPMN/Snipaste_2021-09-29_14-28-43.png)
+
+从上面的图片得知，在 `Task` 中也可以有局部变量存在。
+
+在 `VariableScope` 中定义了一些方法用于在任务和执行中获取变量。
+
+这些方法还使用了缓存，即在调用上面的方法时，引擎会从数据库中取出所有变量。当然也可以通过设置可选的参数进行精细控制数据库查询与流量，即不缓存所有变量。
+
+![Snipaste_2021-09-29_14-47-02.png](../../img/BPMN/Snipaste_2021-09-29_14-47-02.png)
+
+// TODO: 补充使用示例
+
+
+### 瞬时变量
+
+瞬时变量不会被持久化。它具有以下特性：
+
+* 不存储历史
+* 与普通变量类似，设置瞬时变量时会存入最上层父中。这意味着在一个执行中设置一个变量时，瞬时变量实际上会存储在流程实例执行中。与普通变量类似，可以使用局部(local)的对应方法，将变量设置为某个执行或任务的局部变量。
+* 瞬时变量只能在下一个“等待状态”之前访问。之后该变量即消失。等待状态意味着流程实例会异步持久化至数据存储中。
+* 只能使用 `setTransientVariable(name, value)` 设置瞬时变量，但是调用 `getVariable(name)` 也会返回瞬时变量（也有 `getTransientVariable(name)` 方法，它只会返回瞬时变量）。这是为了简化表达式的撰写，并保证已有逻辑可以使用这两种类型的变量。
+
+![Snipaste_2021-09-29_15-05-01.png](../../img/BPMN/Snipaste_2021-09-29_15-05-01.png)
+
+* 瞬时变量屏蔽同名的持久化变量。也就是说当一个流程实例中设置了同名的持久化变量与瞬时变量时， `getVariable("someVariable")` 会返回瞬时变量的值。
+
+// TODO: 待补充使用示例
+
+### 表达式
+
+Flowable使用UEL进行表达式解析。
+
+表达式可以用于Java服务任务(Java Service task)、执行监听器(Execution Listener)、任务监听器(Task Listener) 与 条件顺序流(Conditional sequence flow)等。
+
+flowable中表达式有以下两种类型：
+
+* 值表达式
+
+默认情况下，所有流程变量都可以使用。（若使用Spring）所有的Spring bean也可以用在表达式里。
+
+```
+${myVar}
+${myBean.myProperty}
+```
+
+* 方法表达式
+
+调用一个方法，可以带或不带参数。当调用不带参数的方法时，要确保在方法名后添加空括号（以避免与值表达式混淆）。传递的参数可以是字面值，也可以是表达式，它们会被自动解析。
+
+```
+${printer.print()}
+${myBean.addNewOrder('orderName')}
+${myBean.doSomething(myVar, execution)}
+```
+
+注意表达式只支持解析和比较原始类型、beans, lists, arrays 和maps。
+
+除了所有的流程变量外，还有一些默认对象可在表达式中使用：
+
+* execution
+
+有正在运行的执行的额外信息的执行代理
+
+* task
+
+有当前任务的额外信息的任务代理，只在任务监听器的表达式中可用
+
+* authenticatedUserId
+
+当前已验证的用户id。如果没有已验证的用户，该变量不可用
+
+* variableContainer
+
+// FIXME: 表达式应用的容器？？？
+
+### 表达式函数
+
+variables命名空间下开箱即用的函数
+
+* `variables:get(varName)` : 返回一个变量的值，与使用表达式的区别是当变量不存在时，在某些情况下它不会抛出异常。如： `${variables:get(myVariable) == 'hello'}`  在myVariable不存在时不会抛出异常，而 `${myVariable == "hello"}` 则会抛出异常。
+
+使用示例：
+
+```xml
+<sequenceFlow sourceRef="decision" targetRef="externalSystemCall">
+    <conditionExpression xsi:type="tFormalExpression">
+        <![CDATA[
+            ${variables:get(approved)}
+        ]]>
+    </conditionExpression>
+</sequenceFlow>
+```
+
+* `variables:getOrDefault(varName, defaultValue)` : 与get类似，但是提供了一个参数用于配置默认值，不至于当变量不存在时返回null
+
+使用示例：
+
+```xml
+<sequenceFlow  sourceRef="decision" targetRef="sendRejectionMail">
+    <conditionExpression xsi:type="tFormalExpression">
+        <![CDATA[
+            ${!variables:getOrDefault(approved,false)}
+        ]]>
+    </conditionExpression>
+</sequenceFlow>
+```
+
+* `variables:exists(varName)` : 判断是否存在变量
+
+使用示例：
+
+```xml
+<sequenceFlow  sourceRef="decision" targetRef="sendRejectionMail">
+    <conditionExpression xsi:type="tFormalExpression">
+        <![CDATA[
+            ${variables:exists(approved) && variables:get(approved)}
+        ]]>
+    </conditionExpression>
+</sequenceFlow>
+```
+
+* `variables:isEmpty(varName)` 或 `variables:empty(varName)` : 判断变量是否为空，行为由变量类型决定
+  * `java.lang.String` :  
