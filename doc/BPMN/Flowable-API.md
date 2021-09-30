@@ -409,4 +409,90 @@ variables命名空间下开箱即用的函数
 ```
 
 * `variables:isEmpty(varName)` 或 `variables:empty(varName)` : 判断变量是否为空，行为由变量类型决定
-  * `java.lang.String` :  
+  * `java.lang.String` :  空字符串（null、""）
+  * `java.util.Collection` : 空集合（null、size()==0）
+  * `ArrayNode` : length()==0
+  * 变量为空
+* `variables:isNotEmpty(varName)` 或 `variables:notEmpty(varName)` : 与上面的表达式函数行为相反
+* `variables:equals(varName, value)` 或 `variables:eq(varName, value)` : 判断变量的值是否和给定的值相等，会对变量进行为空的判断 // TODO: 校验null==null
+* `variables:notEquals(varName, value)` 或 `variables:ne(varName, value)` : 判断变量的值是否不相等
+* `variables:contains(varName, value1, value2, …​)` : 判断变量是否包含所给出的所有值，行为也是由变量类型决定
+  * `java.lang.String` : 给定的值是否是变量的子串
+  * `java.util.Collection` : 给定的值是否是变量的一个元素
+  * `ArrayNode` : 变量是否包含给定的 `JsonNode`
+  * 变量是否为空
+* `variables:containsAny(varName, value1, value2, …​)` : 与上面的表达式函数类似，不过只要给定的一个值在变量中，就会返回true
+* `variables:base64(varName)` : 把二进制或字符串变量转换为Base64字符串
+* 比较器函数：
+  * `variables:lowerThan(varName, value)` 或 `variables:lessThan(varName, value)` 或 `variables:lt(varName, value)` : `${execution.getVariable("varName") != null && execution.getVariable("varName") < value}` 的简写
+  * `variables:lowerThanOrEquals(varName, value)` 或 `variables:lessThanOrEquals(varName, value)` 或 `variables:lte(varName, value)` : `${execution.getVariable("varName") != null && execution.getVariable("varName") <= value}` 的简写
+  * `variables:greaterThan(varName, value)` 或 `variables:gt(varName, value)` : `${execution.getVariable("varName") != null && execution.getVariable("varName") > value}` 的简写
+  * `variables:greaterThanOrEquals(varName, value)` 或 `variables:gte(varName, value)` : `${execution.getVariable("varName") != null && execution.getVariable("varName") >= value}` 的简写
+  
+上面的表达式函数，命名空间 `variables` 可以写成 `vars` 或 `var` 
+
+作为参数的变量名无需用引号引住 
+
+上面的表达式函数中不需要将 `execution` 作为参数传递进去，流程引擎会自动合适的变量注入。这也意味着这些函数可以在CMMN标准中以相同的方式被应用。
+
+当然你也可以注册自定义的表达式函数，但是你需要实现 `org.flowable.common.engine.api.delegate.FlowableFunctionDelegate` 接口
+
+// TODO: 待补充使用示例
+
+### 单元测试
+
+Flowable支持JUnit 3、4和5的单元测试风格
+
+JUnit 5 风格可以使用 `org.flowable.engine.test.FlowableTest` 注解或者手动注册 `org.flowable.engine.test.FlowableExtension` 。`FlowableTest` 注解通过 `@ExtendWith(FlowableExtension.class)` 来完成向 `FlowableExtension` 注册。这使得流程引擎和services在测试和生命周期（ `@BeforeAll` , `@BeforeEach` , `@AfterEach` , `@AfterAll` ）方法中作为参数可以被使用。流程引擎默认会根据classpath目录下的 `flowable.cfg.xml` 文件实例化，如果你需要使用不同的配置文件，你可以使用 `org.flowable.engine.test.ConfigurationResource` 注解指出。当配置文件相同时，流程引擎会在多个单元测试中静态缓存。
+
+通过使用 `FlowableExtension` ，你通过 `org.flowable.engine.test.Deployment` 注解可以声明测试方法。如果没有在 `Deployment` 注解中声明 `resources` 属性， `Deployment` 注解默认会在同一包下去找 `测试类名.测试方法名.bpmn20.xml` 资源文件。在测试结束时，会删除这个部署，包括所有相关的流程实例、任务，等等。你也可以通过 `org.flowable.engine.test.DeploymentId` 注解将部署id作为参数注入到你的测试或生命周期方法中。
+
+下面是一个JUnit 5 风格的使用示例：
+
+```java
+package org.fade.demo.flowabledemo.flowableapi.test;
+
+import org.flowable.engine.ProcessEngine;
+import org.flowable.engine.RuntimeService;
+import org.flowable.engine.TaskService;
+import org.flowable.engine.test.ConfigurationResource;
+import org.flowable.engine.test.Deployment;
+import org.flowable.engine.test.DeploymentId;
+import org.flowable.engine.test.FlowableTest;
+import org.flowable.task.api.Task;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+@FlowableTest
+@ConfigurationResource("flowable.custom.cfg.xml")
+public class Example {
+
+    private static final Logger logger = LoggerFactory.getLogger(Example.class);
+
+    private ProcessEngine processEngine;
+    private RuntimeService runtimeService;
+    private TaskService taskService;
+
+    @BeforeEach
+    void setUp(ProcessEngine processEngine) {
+        this.processEngine = processEngine;
+        this.runtimeService = processEngine.getRuntimeService();
+        this.taskService = processEngine.getTaskService();
+    }
+
+    @Test
+    @Deployment(resources = {"holiday-request.bpmn20.xml"})
+//    void testSimpleProcess() {
+    void testSimpleProcess(@DeploymentId String deploymentId) {
+        logger.info("Deployment id is " + deploymentId);
+        runtimeService.startProcessInstanceByKey("holidayRequest");
+        Task task = taskService.createTaskQuery().singleResult();
+        logger.info("Task's name is " + task.getName());
+    }
+
+}
+```
+
+JUnit 3 风格下，测试类必须继承 `org.flowable.engine.test.FlowableTestCase` 
