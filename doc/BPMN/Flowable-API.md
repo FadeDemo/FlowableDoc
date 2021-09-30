@@ -445,7 +445,7 @@ Flowable支持JUnit 3、4和5的单元测试风格
 
 JUnit 5 风格可以使用 `org.flowable.engine.test.FlowableTest` 注解或者手动注册 `org.flowable.engine.test.FlowableExtension` 。`FlowableTest` 注解通过 `@ExtendWith(FlowableExtension.class)` 来完成向 `FlowableExtension` 注册。这使得流程引擎和services在测试和生命周期（ `@BeforeAll` , `@BeforeEach` , `@AfterEach` , `@AfterAll` ）方法中作为参数可以被使用。流程引擎默认会根据classpath目录下的 `flowable.cfg.xml` 文件实例化，如果你需要使用不同的配置文件，你可以使用 `org.flowable.engine.test.ConfigurationResource` 注解指出。当配置文件相同时，流程引擎会在多个单元测试中静态缓存。
 
-通过使用 `FlowableExtension` ，你通过 `org.flowable.engine.test.Deployment` 注解可以声明测试方法。如果没有在 `Deployment` 注解中声明 `resources` 属性， `Deployment` 注解默认会在同一包下去找 `测试类名.测试方法名.bpmn20.xml` 资源文件。在测试结束时，会删除这个部署，包括所有相关的流程实例、任务，等等。你也可以通过 `org.flowable.engine.test.DeploymentId` 注解将部署id作为参数注入到你的测试或生命周期方法中。
+通过 `org.flowable.engine.test.Deployment` 注解可以声明测试方法。如果没有在 `Deployment` 注解中声明 `resources` 属性， `Deployment` 注解默认会在同一包下去找 `测试类名.测试方法名.bpmn20.xml` 资源文件。在测试结束时，会删除这个部署，包括所有相关的流程实例、任务，等等。你也可以通过 `org.flowable.engine.test.DeploymentId` 注解将部署id作为参数注入到你的测试或生命周期方法中。
 
 下面是一个JUnit 5 风格的使用示例：
 
@@ -495,4 +495,94 @@ public class Example {
 }
 ```
 
-JUnit 3 风格下，测试类必须继承 `org.flowable.engine.test.FlowableTestCase` 
+JUnit 3 风格下，测试类必须继承 `org.flowable.engine.test.FlowableTestCase` 。在 `FlowableTestCase` 的 `setup()` 方法中，流程引擎默认会根据classpath目录下的 `flowable.cfg.xml` 文件实例化。如果你要指定一个不同的配置文件，你需要重写 `getConfigurationResource()` 方法。当配置文件相同时，流程引擎会在多个单元测试中静态缓存。
+
+至于测试方法的声明等，可以参考JUnit 5
+
+下面是一个JUnit 3 风格的使用示例：
+
+```java
+package org.fade.demo.flowabledemo.flowableapi.test;
+
+import org.flowable.engine.test.Deployment;
+import org.flowable.engine.test.DeploymentId;
+import org.flowable.engine.test.FlowableTestCase;
+import org.flowable.task.api.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class JUnit3Example extends FlowableTestCase {
+
+    private static final Logger logger = LoggerFactory.getLogger(JUnit3Example.class);
+
+    @Override
+    public String getConfigurationResource() {
+        return "flowable.custom.cfg.xml";
+    }
+
+    @Deployment(resources = {"holiday-request.bpmn20.xml"})
+    public void test() {
+        logger.info("Deployment id is " + deploymentId);
+        runtimeService.startProcessInstanceByKey("holidayRequest");
+        Task task = taskService.createTaskQuery().singleResult();
+        logger.info("Task's name is " + task.getName());
+    }
+
+}
+```
+
+这里需要注意一些JUnit 3 的使用特点，比如无法直接在测试方法上传递参数，像JUnit 5 的注入 `Deployment` id可以无须操作， `FlowableTestCase` 里已有 `deploymentId` 属性。
+
+JUnit 4 风格下要实现相同的效果，需要用到 `org.flowable.engine.test.FlowableRule` 。通过 `FlowableRule` ，可以使用getter方法获取流程引擎和services。其余特点JUnit 4 和JUnit 5 与 JUnit 3 一样。
+
+下面是一个JUnit 4 风格的使用示例：
+
+```java
+package org.fade.demo.flowabledemo.flowableapi.test;
+
+import org.flowable.engine.RepositoryService;
+import org.flowable.engine.RuntimeService;
+import org.flowable.engine.TaskService;
+import org.flowable.engine.test.Deployment;
+import org.flowable.engine.test.FlowableRule;
+import org.flowable.task.api.Task;
+import org.junit.Rule;
+import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class JUnit4Example {
+
+    private static final Logger logger = LoggerFactory.getLogger(JUnit4Example.class);
+
+    @Rule
+    public FlowableRule flowableRule = new FlowableRule("flowable.custom.cfg.xml");
+
+    @Test
+    @Deployment(resources = {"holiday-request.bpmn20.xml"})
+    public void test() {
+        RepositoryService repositoryService = flowableRule.getRepositoryService();
+        org.flowable.engine.repository.Deployment deployment = repositoryService.createDeploymentQuery().singleResult();
+        logger.info("Deployment id is " + deployment.getId());
+        RuntimeService runtimeService = flowableRule.getRuntimeService();
+        runtimeService.startProcessInstanceByKey("holidayRequest");
+        TaskService taskService = flowableRule.getTaskService();
+        Task task = taskService.createTaskQuery().singleResult();
+        logger.info("Task's name is " + task.getName());
+    }
+
+}
+```
+
+上面的例子中测试方法也是无法直接传递参数的，但是要打印 `Deployment` id 可以通过 `RepositoryService` 创建查询获取。自定义配置文件位置可通过 `FlowableRule` 的构造方法实现。
+
+### 调试单元测试
+
+// FIXME: 调试时连接h2数据库，并没有数据
+
+### Web应用中的流程引擎
+
+`ProcessEngine` 是线程安全的类，可以很容易地在多个线程间共享。在web应用中，这意味着可以在容器启动时创建引擎，并在容器关闭时关闭引擎。
+
+// TODO: 待补充
+
