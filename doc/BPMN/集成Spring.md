@@ -27,8 +27,8 @@
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <beans xmlns="http://www.springframework.org/schema/beans"
-       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd">
 
     <bean id="processEngineConfiguration" class="org.flowable.spring.SpringProcessEngineConfiguration">
         <property name="dataSource" ref="dataSource" />
@@ -61,6 +61,8 @@
 
     <bean id="managementService" factory-bean="processEngine" factory-method="getManagementService" />
 
+    <tx:annotation-driven />
+
 </beans>
 ```
 
@@ -71,4 +73,24 @@
 如果自行在Spring配置中声明了 `TransactionAwareDataSourceProxy` ，最好不要将它用在已经配置Spring事务的资源上（例如 `DataSourceTransactionManager` 与 `JPATransactionManager` ）。即使你配置了，这些事务资源还是使用的未代理数据源。
 
 ![Snipaste_2021-09-30_17-45-29.png](../../img/BPMN/Snipaste_2021-09-30_17-45-29.png)
+
+`<tx:annotation-driven />` 是用于开启事务注解
+
+你可以使用下面的代码创建由上面的配置文件配置的Spring应用上下文：
+
+```java
+ApplicationContext applicationContext = new ClassPathXmlApplicationContext("flowable.cfg.xml");
+```
+
+或者如果你想要在单元测试中使用Spring应用上下文你可以：
+
+```java
+@FlowableTest
+@ContextConfiguration("classpath:flowable.cfg.xml")
+public class TransactionTest {
+
+
+
+}
+```
 
