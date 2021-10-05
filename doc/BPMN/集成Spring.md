@@ -136,7 +136,9 @@ public class TransactionTest {
 
 这样你就可以在单元测试中注入一些你所需要的bean
 
-//TODO: 待验证： 上面的service bean， `ProcessEngineFactoryBean` 会为它们添加额外的拦截器，为它们的方法设置事务的传播行为为 `Propagation.REQUIRED` 的事务。
+上面的service bean， `ProcessEngineFactoryBean` 会为它们添加额外的拦截器，为它们的方法设置事务的传播行为为 `Propagation.REQUIRED` 的事务。我们可以在 `org.flowable.common.spring.SpringTransactionInterceptor` 的 `execute` 方法中设置断点验证：
+
+![Snipaste_2021-10-05_21-56-40.png](../../img/BPMN/Snipaste_2021-10-05_21-56-40.png)
 
 
 
