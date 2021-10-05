@@ -82,15 +82,61 @@
 ApplicationContext applicationContext = new ClassPathXmlApplicationContext("flowable.cfg.xml");
 ```
 
-或者如果你想要在单元测试中使用Spring应用上下文你可以：
+接下来你可以通过 `ApplicationContext` 获取你所需要的service bean，并利用这些bean完成前面我们说到的一系列操作：
 
 ```java
+RepositoryService repositoryService = applicationContext.getBean("repositoryService", RepositoryService.class);
+Deployment deployment = repositoryService.createDeployment()
+                .addClasspathResource("holiday-request.bpmn20.xml")
+                .deploy();
+```
+
+上面的代码就用 `RepositoryService` 完成了流程定义的部署
+
+或者如果你想要在单元测试中使用Spring应用上下文你可以：
+
+// FIXME: debug调试有正常语句输出，直接run或者debug返回后无法查找日志记录
+// FIXME: 已尝试@FlowableTest 和 extends SpringFlowableTestCase 皆无法实现预期效果，后者甚至会报错
+
+```java
+package org.fade.demo.flowabledemo.springintegration.test;
+
+import org.flowable.engine.RepositoryService;
+import org.flowable.engine.test.Deployment;
+import org.flowable.engine.test.FlowableTest;
+import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.test.context.ContextConfiguration;
+
 @FlowableTest
 @ContextConfiguration("classpath:flowable.cfg.xml")
 public class TransactionTest {
 
+    private static final Logger logger = LoggerFactory.getLogger(TransactionTest.class);
 
+    private RepositoryService repositoryService;
+
+    public TransactionTest(RepositoryService repositoryService) {
+        this.repositoryService = repositoryService;
+    }
+
+    @Test
+    @Deployment(resources = {"holiday-request.bpmn20.xml"})
+    public void test() {
+        org.flowable.engine.repository.Deployment deployment = repositoryService.createDeployment()
+                .addClasspathResource("holiday-request.bpmn20.xml")
+                .deploy();
+        String deploymentId = deployment.getId();
+        logger.info("Deployment id is " + deploymentId);
+    }
 
 }
 ```
+
+这样你就可以在单元测试中注入一些你所需要的bean
+
+//TODO: 待验证： 上面的service bean， `ProcessEngineFactoryBean` 会为它们添加额外的拦截器，为它们的方法设置事务的传播行为为 `Propagation.REQUIRED` 的事务。
+
+
 
