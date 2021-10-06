@@ -253,3 +253,92 @@ public class ServiceTask {
 上面的示例中，在serviceTask中使用了id为 `serviceTask1` 的bean，以方法表达式的形式调用了bean的方法。
 
 ### 自动部署资源
+
+可以通过在上下文配置的 `SpringProcessEngineConfiguration` 中设置 `deploymentResources` 来实现流程定义的自动部署。
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+    <bean id="processEngineConfiguration" class="org.flowable.spring.SpringProcessEngineConfiguration">
+        
+        ......
+
+        <property name="deploymentResources" value="classpath:holiday-request.bpmn20.xml" />
+    </bean>
+
+    ......
+
+</beans>
+```
+
+这时可以把Java代码里部署流程定义的部分注释掉，可以发现程序是可以正常运行的。
+
+默认情况下，这种自动部署会将符合我们所配置的所有流程定义组织在一起作为一个部署。
+
+当然我们可以通过设置 `SpringProcessEngineConfiguration` 的 `deploymentMode` 属性自定义部署的方式。 `deploymentMode` 可以取值为：
+
+* default 
+
+  默认值，将所有资源组织在一个部署中，并对该部署进行重复过滤。如此当一组资源中的一个发生改变，便会进行重新部署
+
+* single-resource
+
+  为每个资源创建一个单独的部署，对每个部署都进行重复过滤。
+
+* resource-parent-folder
+
+  为同一个目录下的每个资源创建一个单独的部署，并对每个部署都进行重复过滤，但此时资源仍可以放在同一个目录被组织起来。
+
+下面是一个指定部署模式的例子：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+    <bean id="processEngineConfiguration" class="org.flowable.spring.SpringProcessEngineConfiguration">
+        
+        ......
+
+        <!--测试流程定义自动部署-->
+        <property name="deploymentResources" value="classpath:holiday-request.bpmn20.xml" />
+        <!--测试设置部署模式-->
+        <property name="deploymentMode" value="single-resource" />
+    </bean>
+
+    ......
+
+</beans>
+```
+
+如何你希望自定义部署模式，你可以继承 `org.flowable.spring.SpringProcessEngineConfiguration` 类并重写其 `getAutoDeploymentStrategy` 方法实现
+
+// TODO: 验证
+
+### 单元测试
+
+###### JUnit 5
+
+// TODO: 补充示例
+
+###### JUnit 4
+
+// TODO: 补充示例
+
+### 在Hibernate 4.2.x+上使用JPA
+
+在服务任务或者监听器里使用Hibernate 4.2.x+ JPA时，需要导入以下依赖（4.1.x-无须添加此依赖）：
+
+```xml
+<dependency>
+  <groupId>org.springframework</groupId>
+  <artifactId>spring-orm</artifactId>
+  <version>${org.springframework.version}</version>
+</dependency>
+```
+
+// TODO: 待验证
