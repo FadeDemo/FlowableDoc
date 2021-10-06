@@ -140,5 +140,116 @@ public class TransactionTest {
 
 ![Snipaste_2021-10-05_21-56-40.png](../../img/BPMN/Snipaste_2021-10-05_21-56-40.png)
 
+### 表达式
 
+在使用 `ProcessEngineFactoryBean` 时，所有的Spring bean对BPMN流程里的表达式默认是暴露的。
 
+![Snipaste_2021-10-06_12-12-29.png](../../img/BPMN/Snipaste_2021-10-06_12-12-29.png)
+
+你可以通过给 `SpringProcessEngineConfiguration` 的beans属性配置map来配置表达式可以访问的bean。
+
+下面是一个示例：
+
+* 上下文配置文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+    <bean id="processEngineConfiguration" class="org.flowable.spring.SpringProcessEngineConfiguration">
+        <property name="dataSource" ref="dataSource" />
+        <property name="transactionManager" ref="transactionManager" />
+        <property name="databaseSchemaUpdate" value="true" />
+        <!--禁止表达式访问serviceTask1-->
+        <property name="beans">
+            <map>
+                <entry key="serviceTask2" value-ref="serviceTask2" />
+            </map>
+        </property>
+    </bean>
+
+    ......
+
+    <bean id="serviceTask1" class="org.fade.demo.flowabledemo.springintegration.ServiceTask" />
+
+    <bean id="serviceTask2" class="org.fade.demo.flowabledemo.springintegration.ServiceTask" />
+
+</beans>
+```
+
+* 流程定义
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:flowable="http://flowable.org/bpmn"
+             typeLanguage="http://www.w3.org/2001/XMLSchema"
+             expressionLanguage="http://www.w3.org/1999/XPath"
+             targetNamespace="http://www.flowable.org/processdef">
+
+    <process id="holidayRequest" name="Holiday Request" isExecutable="true">
+
+        ......
+
+        <serviceTask id="externalSystemCall" name="Enter holidays in external system"
+                     flowable:expression="${serviceTask1.externalSystemCall(employee)}"/>
+        
+        ......
+
+        <serviceTask id="sendRejectionMail" name="Send out rejection email"
+                     flowable:expression="#{serviceTask1.sendRejectionMail(employee)}"/>
+        
+        ......
+
+    </process>
+
+</definitions>
+```
+
+* serviceTask使用到的bean
+
+```java
+package org.fade.demo.flowabledemo.springintegration;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.UUID;
+
+/**
+ * @author fade
+ * @date 2021/10/06
+ */
+public class ServiceTask {
+
+    private String id;
+
+    private static final Logger logger = LoggerFactory.getLogger(ServiceTask.class);
+
+    public ServiceTask() {
+        this.id = UUID.randomUUID().toString();
+    }
+
+    public void externalSystemCall(String employee) {
+        logger.info(this.id + ": Calling the external system for employee "
+                + employee);
+    }
+
+    public void sendRejectionMail(String employee) {
+        logger.info(this.id + ": Sending rejection email for employee "
+                + employee);
+    }
+
+}
+```
+
+上面的示例中，在serviceTask中使用了id为 `serviceTask1` 的bean，以方法表达式的形式调用了bean的方法。
+
+### 自动部署资源

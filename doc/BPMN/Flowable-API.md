@@ -342,6 +342,8 @@ ${myBean.addNewOrder('orderName')}
 ${myBean.doSomething(myVar, execution)}
 ```
 
+方法表达式中${}和#{}都可以使用，具体参考[JavaEE6规范](https://docs.oracle.com/javaee/6/tutorial/doc/bnahu.html#bnahz)
+
 注意表达式只支持解析和比较原始类型、beans, lists, arrays 和maps。
 
 除了所有的流程变量外，还有一些默认对象可在表达式中使用：
