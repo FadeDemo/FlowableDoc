@@ -268,6 +268,6 @@ public class MyRestController {
 }
 ```
 
-重启启动应用，调用controller中提供的REST API即可。
+重新启动应用，调用controller中提供的REST API即可。
 
 ![Snipaste_2021-10-07_18-28-54.png](../../img/BPMN/Snipaste_2021-10-07_18-28-54.png)
