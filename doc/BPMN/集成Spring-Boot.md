@@ -603,3 +603,42 @@ public class MyRestController {
 </definitions>
 ```
 
+### Flowable Actuator Endpoints
+
+为了使用Actuator Endpoints，你需要导入以下依赖：
+
+```xml
+<dependency>
+    <groupId>org.flowable</groupId>
+    <artifactId>flowable-spring-boot-starter-actuator</artifactId>
+    <version>${flowable-version}</version>
+</dependency>
+```
+
+flowable为正在运行的流程提供了 `Spring Boot Actuator Endpoint` 。默认情况下flowable的endpoint被映射为 `/actuator/flowable` ，但是Spring Boot默认只暴露 `info` 和 `health` endpoint。为了让flowable的endpoint可以生效，你需要在配置环境中做一些配置：
+
+// FIXME: 官网的 `management.endpoints.web.exposure.include=true` 不生效
+
+* yml
+
+```yml
+management:
+#  endpoints:
+#    web:
+#      exposure:
+#        include: '*'
+  endpoint:
+    flowable:
+      enabled: true
+```
+
+* properties
+
+```properties
+#management.endpoint.flowable.enabled=true
+management.endpoints.web.exposure.include=*
+```
+
+重启应用，此时便可以通过暴露的endpoint查看flowable正在运行的流程信息了。
+
+![Snipaste_2021-10-08_11-24-34.png](../../img/BPMN/Snipaste_2021-10-08_11-24-34.png)
