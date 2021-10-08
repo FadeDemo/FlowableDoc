@@ -24,9 +24,7 @@ flowable的starter支持Spring Boot 2.0+ 和1.5。但它主要支持Spring Boot 
 </dependency>
 ```
 
-如果你不需要引入所有的引擎，你可以使用flowable其它的starter，这些将在后面讲到。
-
-// TODO: 补充starter选择
+如果你不需要引入所有的引擎，你可以使用flowable其它的[starter](#flowable-starter)，这些将在后面讲到。
 
 除了上面的依赖，你还需要导入你的数据库依赖或配置。
 
@@ -891,3 +889,73 @@ management.endpoint.flowable.cache.time-to-live=0ms
 # 是否开启flowable endpoint
 management.endpoint.flowable.enabled=true 
 ```
+
+### flowable自动配置类
+
+* [ContentEngineAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/content/ContentEngineAutoConfiguration.java)
+* [ContentEngineServicesAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/content/ContentEngineServicesAutoConfiguration.java)
+* [CmmnEngineAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/cmmn/CmmnEngineAutoConfiguration.java)
+* [CmmnEngineServicesAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/cmmn/CmmnEngineServicesAutoConfiguration.java)
+* [DmnEngineAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/dmn/DmnEngineAutoConfiguration.java)
+* [DmnEngineServicesAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/dmn/DmnEngineServicesAutoConfiguration.java)
+* [EndpointAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/EndpointAutoConfiguration.java)
+* [FlowableInfoAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/actuate/info/FlowableInfoAutoConfiguration.java)
+* [FlowableLdapAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/ldap/FlowableLdapAutoConfiguration.java)
+* [FormEngineAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/form/FormEngineAutoConfiguration.java)
+* [FormEngineServicesAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/form/FormEngineServicesAutoConfiguration.java)
+* [IdmEngineAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/idm/IdmEngineAutoConfiguration.java)
+* [IdmEngineServicesAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/idm/IdmEngineServicesAutoConfiguration.java)
+* [ProcessEngineAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/ProcessEngineAutoConfiguration.java)
+* [RestApiAutoConfiguration](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-spring-boot/flowable-spring-boot-starters/flowable-spring-boot-autoconfigure/src/main/java/org/flowable/spring/boot/RestApiAutoConfiguration.java)
+
+### flowable starter
+
+| starter | 描述 |
+|----|----|
+| `flowable-spring-boot-starter-cmmn` | 提供以独立运行模式启动CMMN引擎的依赖 |
+| `flowable-spring-boot-starter-cmmn-rest` | 提供以独立运行模式启动CMMN引擎，并提供其REST API的依赖 |
+| `flowable-spring-boot-starter-dmn` | 提供以独立运行模式启动DMN引擎的依赖 |
+| `flowable-spring-boot-starter-dmn-rest` | 提供以独立运行模式启动DMN引擎，并提供其REST API的依赖 |
+| `flowable-spring-boot-starter-process` | 提供以独立运行模式启动流程引擎的依赖 |
+| `flowable-spring-boot-starter-process-rest` | 提供以独立运行模式启动流程引擎，并提供其REST API的依赖 |
+| `flowable-spring-boot-starter` | 提供启动所有Flowable引擎（流程，CMMN，DMN，Form，Content及IDM）的依赖 |
+| `flowable-spring-boot-starter-rest` | 提供启动所有Flowable引擎，并提供其REST API的依赖 |
+| `flowable-spring-boot-starter-actuator` | 提供Spring Boot Actuator所需的依赖 |
+
+### 使用Liquibase
+
+Flowable引擎使用Liquibase管理数据库版本。这意味着会启用Spring Boot的 `LiquibaseAutoConfiguration` 。如果你通过设置 `spring.liquibase.enabled=false` 关闭了Liquibase，你的flowable应用将无法正常启动并抛出一个异常。
+
+### 高级配置
+
+###### 自定义引擎配置
+
+如果你想要自定义引擎配置，你可以实现 `org.flowable.spring.boot.EngineConfigurationConfigurer<T>` 接口。其中泛型T是Spring环境下的引擎配置
+
+// TODO: 补充示例
+
+在纳入Spring管理后， `configure` 方法会在流程引擎创建前调用
+
+###### 配置异步执行器
+
+默认情况下， `AsyncExecutor` 共享同一个Spring `TaskExecutor` 及 `SpringRejectedJobsHandler` 。 如果需要为引擎提供专门的执行器，则需要使用 `@Process` 及 `@Cmmn` 注解定义的bean，如：
+
+```java
+@Configuration
+public class MyConfiguration {
+
+    @Process 
+    @Bean
+    public TaskExecutor processTaskExecutor() {
+        return new SimpleAsyncTaskExecutor();
+    }
+
+    @Cmmn 
+    @Bean
+    public TaskExecutor cmmnTaskExecutor() {
+        return new SyncTaskExecutor();
+    }
+}
+```
+
+如果使用了自定义的 `TaskExecutor` bean，则Flowable将不会再创建自己的bean。 也就是说如果使用 `@Process` 注解定义了bean，也需要使用 `@Cmmn` 或 `@Primary` 再定义一个bean。否则Cmmn异步执行器将使用流程引擎所用的bean。
