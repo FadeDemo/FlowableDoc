@@ -137,8 +137,8 @@ spring:
   datasource:
     url: jdbc:mysql:///flowable?characterEncoding=UTF-8&serverTimezone=UTC
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: 1120.ypzpoi
+    username: your-own-username
+    password: your-own-password
     # 指定数据源或连接池类型
     type: com.alibaba.druid.pool.DruidDataSource
 ```
@@ -271,3 +271,335 @@ public class MyRestController {
 重新启动应用，调用controller中提供的REST API即可。
 
 ![Snipaste_2021-10-07_18-28-54.png](../../img/BPMN/Snipaste_2021-10-07_18-28-54.png)
+
+### JPA 支持
+
+为了在Spring Boot中添加flowable对JPA的支持，你需要添加以下依赖：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+    <version>${spring-boot-version}</version>
+</dependency>
+```
+
+`spring-boot-starter-data-jpa` 会默认使用Hibernate作为JPA提供者
+
+下面是一个例子：
+
+* 实体类
+
+```java
+package org.fade.demo.flowabledemo.springboot.entity;
+
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import java.util.Date;
+
+/**
+ * @author fade
+ * @date 2021/10/08
+ */
+@Entity
+public class Person {
+
+    @Id
+    @GeneratedValue
+    private Long id;
+
+    private String username;
+
+    private String firstName;
+
+    private String lastName;
+
+    private Date birthDate;
+
+    public Person() {
+    }
+
+    public Person(String username, String firstName, String lastName, Date birthDate) {
+        this.username = username;
+        this.firstName = firstName;
+        this.lastName = lastName;
+        this.birthDate = birthDate;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public Date getBirthDate() {
+        return birthDate;
+    }
+
+    public void setBirthDate(Date birthDate) {
+        this.birthDate = birthDate;
+    }
+
+}
+```
+
+* 配置文件
+
+```yml
+spring:
+  datasource:
+    url: jdbc:mysql:///flowable?characterEncoding=UTF-8&serverTimezone=UTC
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: your-own-username
+    password: your-own-password
+    # 指定数据源或连接池类型
+    type: com.alibaba.druid.pool.DruidDataSource
+  jpa:
+    hibernate:
+      ddl-auto: update
+```
+
+其中 `spring.jpa.hibernate.ddl-auto=update` 的作用是让JPA自动建表
+
+* repository
+
+```java
+package org.fade.demo.flowabledemo.springboot.dao;
+
+import org.fade.demo.flowabledemo.springboot.entity.Person;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+/**
+ * @author fade
+ * @date 2021/10/08
+ */
+@Repository
+public interface PersonRepository extends JpaRepository<Person, Long> {
+
+    /**
+     * 根据用户名查找Person
+     * @param username 用户名
+     * @return {@link Person}
+     */
+    Person findByUsername(String username);
+
+}
+```
+
+* service
+
+```java
+package org.fade.demo.flowabledemo.springboot.service;
+
+import org.fade.demo.flowabledemo.springboot.dao.PersonRepository;
+import org.fade.demo.flowabledemo.springboot.entity.Person;
+import org.flowable.engine.RuntimeService;
+import org.flowable.engine.TaskService;
+import org.flowable.task.api.Task;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.annotation.Resource;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * @author fade
+ * @date 2021/10/07
+ */
+@Service
+@Transactional(rollbackFor = Throwable.class)
+public class MyService {
+
+    @Resource
+    private RuntimeService runtimeService;
+
+    @Resource
+    private TaskService taskService;
+
+    @Resource
+    private PersonRepository personRepository;
+
+    public void startProcess(String assignee) {
+
+        Person person = personRepository.findByUsername(assignee);
+
+        Map<String, Object> variables = new HashMap<>(16);
+        variables.put("person", person);
+        runtimeService.startProcessInstanceByKey("oneTaskProcess", variables);
+    }
+
+    public List<Task> getTasks(String assignee) {
+        return taskService.createTaskQuery().taskAssignee(assignee).list();
+    }
+
+    public void createDemoUsers() {
+        if (personRepository.findAll().size() == 0) {
+            personRepository.save(new Person("jbarrez", "Joram", "Barrez", new Date()));
+            personRepository.save(new Person("trademakers", "Tijs", "Rademakers", new Date()));
+        }
+    }
+
+}
+```
+
+* 主启动类
+
+```java
+package org.fade.demo.flowabledemo.springboot;
+
+import org.fade.demo.flowabledemo.springboot.service.MyService;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+
+/**
+ * @author fade
+ * @date 2021/10/07
+ */
+@SpringBootApplication
+public class ExampleApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(ExampleApplication.class, args);
+    }
+
+    @Bean
+    public CommandLineRunner init(final MyService myService) {
+        return strings -> myService.createDemoUsers();
+    }
+
+}
+```
+
+* controller
+
+```java
+package org.fade.demo.flowabledemo.springboot.controller;
+
+import org.fade.demo.flowabledemo.springboot.service.MyService;
+import org.flowable.task.api.Task;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.*;
+
+import javax.annotation.Resource;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * @author fade
+ * @date 2021/10/07
+ */
+@RestController
+public class MyRestController {
+
+    @Resource
+    private MyService myService;
+
+    @PostMapping(value="/process")
+    public void startProcessInstance(@RequestBody StartProcessRepresentation startProcessRepresentation) {
+        myService.startProcess(startProcessRepresentation.getAssignee());
+    }
+
+    @RequestMapping(value="/tasks", method= RequestMethod.GET, produces= MediaType.APPLICATION_JSON_VALUE)
+    public List<TaskRepresentation> getTasks(@RequestParam String assignee) {
+        List<Task> tasks = myService.getTasks(assignee);
+        List<TaskRepresentation> dtos = new ArrayList<>();
+        for (Task task : tasks) {
+            dtos.add(new TaskRepresentation(task.getId(), task.getName()));
+        }
+        return dtos;
+    }
+
+    static class TaskRepresentation {
+
+        private String id;
+        private String name;
+
+        public TaskRepresentation(String id, String name) {
+            this.id = id;
+            this.name = name;
+        }
+
+        public String getId() {
+            return id;
+        }
+        public void setId(String id) {
+            this.id = id;
+        }
+        public String getName() {
+            return name;
+        }
+        public void setName(String name) {
+            this.name = name;
+        }
+
+    }
+
+    static class StartProcessRepresentation {
+
+        private String assignee;
+
+        public String getAssignee() {
+            return assignee;
+        }
+
+        public void setAssignee(String assignee) {
+            this.assignee = assignee;
+        }
+    }
+
+}
+```
+
+* 流程定义
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions
+        xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+        xmlns:flowable="http://flowable.org/bpmn"
+        targetNamespace="Examples">
+
+    <process id="oneTaskProcess" name="The One Task Process">
+        <startEvent id="theStart" />
+        <sequenceFlow id="flow1" sourceRef="theStart" targetRef="theTask" />
+        <userTask id="theTask" name="my task" flowable:assignee="${person.id}"/>
+        <sequenceFlow id="flow2" sourceRef="theTask" targetRef="theEnd" />
+        <endEvent id="theEnd" />
+    </process>
+
+</definitions>
+```
+
