@@ -181,3 +181,12 @@ taskService.claim(task.getId(), "kermit");
 ```java
 List<Task> kermitTasks = taskService.createTaskQuery().taskAssignee("kermit").list();
 ```
+
+// FIXME: 与Github `flowable-ui` 同样版本的Maven `flowable-engine` 数据库版本不一致
+
+你也可以通过点击如下 `flowable-ui` 应用里的位置进行申领任务：
+
+![Snipaste_2021-10-11_14-39-08.png](../../img/BPMN/Snipaste_2021-10-11_14-39-08.png)
+
+###### 完成任务
+
