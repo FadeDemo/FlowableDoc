@@ -39,7 +39,11 @@ BPMN 2.0 流程定义文件（后面统称流程定义文件）以 `.bpmn20.xml`
 
 ###### 前置准备
 
-本地独立的h2服务器，并修改数据库连接url为 `jdbc.url=jdbc:h2:tcp://localhost/flowable` 
+1. 本地独立的h2服务器，并修改数据库连接url为 `jdbc.url=jdbc:h2:tcp://localhost/flowable` 
+2. 修改 `flowable-ui` 的[配置文件](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-ui/flowable-ui-app/src/main/resources/flowable-default.properties)，把数据源信息修改为本地独立的h2服务器信息：
+   1. ![Snipaste_2021-10-11_11-06-13.png](../../img/BPMN/Snipaste_2021-10-11_11-06-13.png)
+
+   2. ![Snipaste_2021-10-11_11-06-52.png](../../img/BPMN/Snipaste_2021-10-11_11-06-52.png)
 
 ###### 用例
 
@@ -123,3 +127,57 @@ ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("fina
 
 ###### 任务列表
 
+我们可以通过下列代码获取任务列表：
+
+```java
+TaskService taskService = processEngine.getTaskService();
+List<Task> tasks = taskService.createTaskQuery().taskCandidateGroup("accountancy").list();
+```
+
+上面的代码获取了属于会计组的用户任务。
+
+然后我们启动 `flowable-ui` [这个应用](https://github.com/flowable/flowable-engine/blob/main/modules/flowable-ui/flowable-ui-app/src/main/java/org/flowable/ui/application/FlowableUiApplication.javahttps://github.com/flowable/flowable-engine/blob/main/modules/flowable-ui/flowable-ui-app/src/main/java/org/flowable/ui/application/FlowableUiApplication.java)，创建两个新用户 `kermit` 和 `fozzie` :
+
+![Snipaste_2021-10-11_08-58-30.png](../../img/BPMN/Snipaste_2021-10-11_08-58-30.png)
+
+再创建两个组 `accountancy` 和 `management` : 
+
+// TODO: 待验证 `flowable-ui` 中的组的组id和名称到底哪个才是被使用的
+
+![Snipaste_2021-10-11_09-11-56.png](../../img/BPMN/Snipaste_2021-10-11_09-11-56.png)
+
+把 `kermit` 分配给 `accountancy` 组，把 `fozzie` 组分配给 `management` 组：
+
+![Snipaste_2021-10-11_09-16-21.png](../../img/BPMN/Snipaste_2021-10-11_09-16-21.png)
+
+![Snipaste_2021-10-11_09-15-44.png](../../img/BPMN/Snipaste_2021-10-11_09-15-44.png)
+
+我们再给 `accountancy` 和 `management` 两个组分配权限：
+
+![Snipaste_2021-10-11_11-14-39.png](../../img/BPMN/Snipaste_2021-10-11_11-14-39.png)
+
+现在用 `kermit` 重新登录 `flowable-ui` 应用，点击下面的页面，可以启动流程实例：
+
+![Snipaste_2021-10-11_11-18-42.png](../../img/BPMN/Snipaste_2021-10-11_11-18-42.png)
+
+流程执行到用户任务处会停止，第一个用户任务便是由会计组处理的，由于 `kermit` 是会计组的一员，所以可以在下面的页面查看到它有任务待处理。并且会计组的每一个成员都能看到这个任务，也有权限去处理。
+
+![Snipaste_2021-10-11_11-26-42.png](../../img/BPMN/Snipaste_2021-10-11_11-26-42.png)
+
+注意上面的筛选条件。
+
+###### 申领任务
+
+会计组的成员可以申领任务，申领任务后，申领任务的用户会成为任务的执行人（assignee）。任务被申领后，该任务会从会计组中其它成员中的任务列表中消失，出现在申领任务者的个人任务列表中。
+
+下面的代码可以实现申领任务：
+
+```java
+taskService.claim(task.getId(), "kermit");
+```
+
+下面的代码可以实现查询任务执行人为某个人的任务列表：
+
+```java
+List<Task> kermitTasks = taskService.createTaskQuery().taskAssignee("kermit").list();
+```
