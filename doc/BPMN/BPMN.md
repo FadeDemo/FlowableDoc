@@ -319,11 +319,154 @@ Flowable将开发者的感受放在最高优先级，因此它引入了一些'Fl
 * `Catching` 当流程执行到达这个事件时，会等待直到触发器触发。捕获事件内部的图标没有填充（即是白色的）。
 * `Throwing` 当流程执行到达这个事件时，会触发一个触发器。抛出事件内部的图标填充为黑色。
 
+###### 事件
+
+* ###### 开始事件（对应 `startEvent` 标签）
+
+开始事件是流程的起点。启动事件的类型定义了流程如何启动，流程图中的启动事件中的小图标即代表启动事件的类型。
+
+![Snipaste_2021-10-12_13-50-53.png](../../img/BPMN/Snipaste_2021-10-12_13-50-53.png)
+
+启动事件的类型在xml中由事件定义子元素定义：
+
+```xml
+<startEvent id="theStart">
+  <timerEventDefinition>
+    <timeDate>2011-03-11T12:13:14</timeDate>
+  </timerEventDefinition>
+</startEvent>
+```
+
+启动事件是捕获事件。
+
+在启动事件中，可以使用下列Flowable自定义参数：
+
+`flowable:initiator` 指明保存认证用户ID用的变量名。在流程启动时，操作用户的ID会保存在这个变量中。
+
+```xml
+<startEvent id="request" flowable:initiator="initiator" />
+```
+
+认证用户通过调用 `IdentityService` 的 `setAuthenticatedUserId` 方法设置，flowable应用已经集成了此方法的调用，可以在表单中使用。
+
+// TODO: 补充示例
+
+* ###### 空启动事件（对应 `startEvent` 标签）
+
+即未指定启动流程实例触发的事件定义，引擎将无法预知何时启动流程实例，只能通过调用API启动流程实例：
+
+```java
+ProcessInstance processInstance = runtimeService.startProcessInstanceByXXX();
+```
+
+子流程必须要有空启动事件
+
+空启动事件对应流程图中的图标为：
+
+![bpmn.none.start.event.png](../../img/BPMN/bpmn.none.start.event.png)
+
+xml定义为无子元素的标签即可：
+
+```xml
+<startEvent id="start" name="my start event" />
+```
+
+下面是空启动事件的自定义扩展：
+
+`flowable:formKey` 引用表单定义，用户需要在启动新流程实例时填写该表单。
+
+```xml
+<startEvent id="request" flowable:formKey="request" />
+```
+
+// TODO: 补充自定义扩展使用示例
+
+* ###### 定时器启动事件（对应含有 `timerEventDefinition` 事件定义的 `startEvent` 标签）
+
+用于创建定时启动的流程实例，子流程不能设置定时器启动事件。定时器事件在被部署时会被调度，无需通过调用API启动流程实例。当部署带有定时器启动事件的流程的新版本时，上一版本的定时器作业会被移除。
+
+定时器启动事件对应流程图中的图标为：
+
+![bpmn.clock.start.event.png](../../img/BPMN/bpmn.clock.start.event.png)
+
+定时器启动事件的xml表述如下所示，具体查看[定时器事件定义](#定时器事件定义)部分内容：
+
+```xml
+<startEvent id="theStart">
+  <timerEventDefinition>
+    <timeCycle>R4/2011-03-11T12:13/PT5M</timeCycle>
+  </timerEventDefinition>
+</startEvent>
+```
+
+* ###### 消息启动事件（对应含有 `messageEventDefinition` 事件定义的 `startEvent` 标签）
+
+使用具名消息启动流程实例，一个流程定义中可以有多个消息启动事件。在部署有消息启动事件的流程定义时，会做如下判断：
+
+* 给定流程定义中，消息启动事件的名字必须是唯一的。一个流程定义不得包含多个同名的消息启动事件。
+* 在所有已部署的流程定义中，消息启动事件的名字必须是唯一的。
+* 在部署流程定义的新版本时，会取消上一版本的消息订阅。
+
+含有消息启动事件的流程实例可以通过调用 `RuntimeService` 的 `startProcessInstanceByMessage` 方法进行启动：
+
+```java
+runtimeService.startProcessInstanceByMessage(...)
+```
+
+传递给API的消息名是由 `messageEventDefinition` 标签的 `messageRef` 属性引用的 `message` 标签的name属性值。
+
+并且在启动时还会做以下判断：
+
+* 子流程不支持消息启动事件
+* 如果一个流程定义中有多个消息启动事件，可以使用 `runtimeService.startProcessInstanceByMessage(…​)` 选择合适的启动事件
+* 如果一个流程定义中有多个消息启动事件与一个空启动事件，则 `runtimeService.startProcessInstanceByKey(…​)` 与 `runtimeService.startProcessInstanceById(…​)` 会使用空启动事件启动流程实例
+* 如果一个流程定义中有多个消息启动事件而没有空启动事件，则 `runtimeService.startProcessInstanceByKey(…​)与runtimeService.startProcessInstanceById(…​)` 会抛出异常
+* 如果一个流程定义中只有一个消息启动事件，则 `runtimeService.startProcessInstanceByKey(…​)` 与 `runtimeService.startProcessInstanceById(…​)` 会使用这个消息启动事件启动新流程实例
+* 如果流程由调用活动（call activity）启动，则只有在下列情况下才支持消息启动事件:
+  * 除了消息启动事件之外，流程还有唯一的空启动事件
+  * 流程只有唯一的消息启动事件，而没有其他启动事件
+
+消息启动事件对应流程图中的图标为：
+
+![bpmn.start.message.event.png](../../img/BPMN/bpmn.start.message.event.png)
+
+消息启动事件的xml表述如下所示，具体查看[消息事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<definitions id="definitions"
+  xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:flowable="http://flowable.org/bpmn"
+  targetNamespace="Examples"
+  xmlns:tns="Examples">
+
+  <message id="newInvoice" name="newInvoiceMessage" />
+
+  <process id="invoiceProcess">
+
+    <startEvent id="messageStart" >
+        <messageEventDefinition messageRef="tns:newInvoice" />
+    </startEvent>
+    ...
+  </process>
+
+</definitions>
+```
+
+// TODO: 补充使用示例
+
+* ###### 信号启动事件（对应含有 `signalEventDefinition` 事件定义的 `startEvent` 标签）
+
+使用具名信号启动流程实例，这个信号可以由[流程实例中的信号抛出中间事件](配置.md#为流程定义增加监听器)，或者API（runtimeService.signalEventReceivedXXX方法）触发。
+
+信号启动事件可以选择异步还是同步启动流程实例。
+
+
+
 ###### 事件定义
 
 事件定义（event definition），用于定义事件的语义。没有事件定义的话，事件就“不做什么特别的事情”。例如，一个没有事件定义的开始事件，并不限定具体是什么启动了流程。如果为这个开始事件添加事件定义（例如定时器事件定义），就声明了启动流程的“类型”。
 
-###### 定时器事件定义
+* ###### 定时器事件定义
 
 定时器事件（ `timerEventDefinition` ），是由定时器所触发的事件。可以用于开始事件，中间事件，或边界事件。定时器事件的行为取决于所使用的业务日历（business calendar）。定时器事件有默认的业务日历，但也可以为每个定时器事件单独定义业务日历。
 
