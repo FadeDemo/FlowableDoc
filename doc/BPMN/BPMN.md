@@ -190,3 +190,143 @@ List<Task> kermitTasks = taskService.createTaskQuery().taskAssignee("kermit").li
 
 ###### 完成任务
 
+代码上通过 `TaskService` 的 `complete` 方法实现：
+
+```java
+taskService.complete(task.getId());
+```
+
+你也可以通过 `flowable-ui` 应用进行操作：
+
+![Snipaste_2021-10-12_10-59-32.png](../../img/BPMN/Snipaste_2021-10-12_10-59-32.png)
+
+当任务完成后，流程又会继续执行直到下一个用户任务，这里是“经理进行审批”。对于“经理进行审批”的用户任务上面所描述的同样也适用。
+
+###### 结束流程
+
+示例中的“经理进行审批”的用户任务执行完，流程会移至结束事件并结束流程实例，同时所有相关的运行时执行数据都会从数据库中移除。
+
+我们可以通过下面的代码验证流程是否结束：
+
+```java
+HistoryService historyService = processEngine.getHistoryService();
+HistoricProcessInstance historicProcessInstance =
+                historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstance.getProcessInstanceId()).singleResult();
+logger.info("Process instance end time: " + historicProcessInstance.getEndTime());
+```
+
+我们也可以通过 `flowable-ui` 验证流程是否结束：
+
+![Snipaste_2021-10-12_11-16-07.png](../../img/BPMN/Snipaste_2021-10-12_11-16-07.png)
+
+###### 完整的代码流程
+
+```java
+package org.fade.demo.flowabledemo.bpmn;
+
+import cn.hutool.core.lang.Assert;
+import cn.hutool.setting.dialect.Props;
+import org.flowable.engine.*;
+import org.flowable.engine.history.HistoricProcessInstance;
+import org.flowable.engine.impl.cfg.StandaloneProcessEngineConfiguration;
+import org.flowable.engine.repository.Deployment;
+import org.flowable.engine.runtime.ProcessInstance;
+import org.flowable.task.api.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+
+/**
+ * @author fade
+ * @date 2021/10/09
+ */
+public class Main {
+
+    private static final Logger logger = LoggerFactory.getLogger(Main.class);
+
+    public static void main(String[] args) {
+        Props props = new Props("db.properties");
+//        String jdbcUrl = props.getProperty("ui-url");
+        String jdbcUrl = props.getProperty("java-url");
+        String username = props.getProperty("username");
+        String password = props.getProperty("password");
+        Assert.notBlank(jdbcUrl, "jdbcUrl is illegal");
+        Assert.notBlank(username, "username is illegal");
+        Assert.notNull(password, "password can not be null");
+        ProcessEngineConfiguration cfg = new StandaloneProcessEngineConfiguration()
+                .setJdbcUrl(jdbcUrl)
+                .setJdbcUsername(username)
+                .setJdbcPassword(password)
+                .setJdbcDriver("org.h2.Driver")
+                .setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE);
+        ProcessEngine processEngine = cfg.buildProcessEngine();
+        // 部署流程定义
+        RepositoryService repositoryService = processEngine.getRepositoryService();
+        Deployment deployment = repositoryService.createDeployment()
+                .addClasspathResource("FinancialReportProcess.bpmn20.xml")
+                .deploy();
+        // 启动流程实例
+        RuntimeService runtimeService = processEngine.getRuntimeService();
+        ProcessInstance processInstance = runtimeService.startProcessInstanceByKey("financialReport");
+        // 获取任务列表
+        TaskService taskService = processEngine.getTaskService();
+        List<Task> tasks = taskService.createTaskQuery().taskCandidateGroup("accountancy").list();
+        logger.info("Accountancy group has " + tasks.size() + " task(s)");
+        // 申领任务
+        taskService.claim(tasks.get(0).getId(), "kermit");
+        // 查询任务执行人为kermit的任务列表
+        List<Task> kermitTasks = taskService.createTaskQuery().taskAssignee("kermit").list();
+        logger.info("Kermit has " + kermitTasks.size() + " task(s)");
+        // 完成任务
+//        taskService.complete(tasks.get(0).getId());
+        tasks.forEach(task -> {
+            taskService.complete(task.getId());
+        });
+        kermitTasks = taskService.createTaskQuery().taskAssignee("kermit").list();
+        logger.info("Kermit has " + kermitTasks.size() + " task(s)");
+        tasks = taskService.createTaskQuery().taskCandidateGroup("management").list();
+        logger.info("Management group has " + tasks.size() + " task(s)");
+        tasks.forEach(task -> {
+            taskService.complete(task.getId());
+        });
+        tasks = taskService.createTaskQuery().taskCandidateGroup("management").list();
+        logger.info("Management group has " + tasks.size() + " task(s)");
+        // 验证流程是否结束
+        HistoryService historyService = processEngine.getHistoryService();
+        HistoricProcessInstance historicProcessInstance =
+                historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstance.getProcessInstanceId()).singleResult();
+        logger.info("Process instance end time: " + historicProcessInstance.getEndTime());
+    }
+
+}
+```
+
+## 结构
+
+### 自定义扩展
+
+Flowable将开发者的感受放在最高优先级，因此它引入了一些'Flowable BPMN扩展（extensions）'。这些“扩展”并不在BPMN 2.0规格中，有些是新结构，有些是对特定结构的简化。尽管BPMN 2.0规格明确指出可以支持自定义扩展，但是flowable仍做了一些保证：
+
+* 自定义扩展保证是在标准方式的基础上进行简化
+* 使用自定义扩展时，总是通过flowable:命名空间前缀，明确标识出XML元素、属性等。注意Flowable引擎也支持activiti:命名空间前缀。
+
+### 事件
+
+事件（event）通常用于为流程生命周期中发生的事情建模。事件总是被图形化为圆圈。在BPMN 2.0中，有两种主要的事件：捕获（catching）与抛出（throwing）事件。
+
+
+* `Catching` 当流程执行到达这个事件时，会等待直到触发器触发。捕获事件内部的图标没有填充（即是白色的）。
+* `Throwing` 当流程执行到达这个事件时，会触发一个触发器。抛出事件内部的图标填充为黑色。
+
+###### 事件定义
+
+事件定义（event definition），用于定义事件的语义。没有事件定义的话，事件就“不做什么特别的事情”。例如，一个没有事件定义的开始事件，并不限定具体是什么启动了流程。如果为这个开始事件添加事件定义（例如定时器事件定义），就声明了启动流程的“类型”。
+
+###### 定时器事件定义
+
+定时器事件（ `timerEventDefinition` ），是由定时器所触发的事件。可以用于开始事件，中间事件，或边界事件。定时器事件的行为取决于所使用的业务日历（business calendar）。定时器事件有默认的业务日历，但也可以为每个定时器事件单独定义业务日历。
+
+
+// TODO: 补充开始事件、中间事件和边界事件链接
+
