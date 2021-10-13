@@ -570,6 +570,88 @@ runtimeService.startProcessInstanceByMessage(...)
 
 // TODO: 待补充使用示例
 
+* ###### 终止结束事件（对应含有 `terminateEventDefinition` 事件定义的 `endEvent` 标签）
+
+当到达终止结束事件时，当前的流程实例或子流程会被终止。也就是说，当执行到达终止结束事件时，会判断第一个范围 scope（流程或子流程）并终止它。请注意在BPMN 2.0中，子流程可以是嵌入式子流程，调用活动，事件子流程，或事务子流程。有一条通用规则：当存在多实例的调用过程或嵌入式子流程时，只会终止一个实例，其他的实例与流程实例不会受影响。
+
+可以添加一个可选属性terminateAll。当其为true时，无论该终止结束事件在流程定义中的位置，也无论它是否在子流程（甚至是嵌套子流程）中，都会终止（根）流程实例。
+
+// TODO: 待理解，比如终止根流程实例，子流程会终止吗
+
+终止结束事件对应流程图中的图标为：
+
+![bpmn.terminate.end.event.png](../../img/BPMN/bpmn.terminate.end.event.png)
+
+终止结束事件的xml表述如下所示：
+
+```xml
+<endEvent id="myEndEvent >
+  <terminateEventDefinition flowable:terminateAll="true"></terminateEventDefinition>
+</endEvent>
+```
+
+// TODO: 补充使用示例
+
+* ###### 取消终止事件（对应含有 `cancelEventDefinition` 事件定义的 `endEvent` 标签）
+
+取消结束事件只能与BPMN事务子流程一起使用。当到达取消结束事件时，会抛出取消事件，且必须由取消边界事件捕获。取消边界事件将取消事务，并触发补偿。
+
+取消结束事件对应流程图中的图标为：
+
+![bpmn.cancel.end.event.png](../../img/BPMN/bpmn.cancel.end.event.png)
+
+取消结束事件的xml表述如下所示：
+
+```xml
+<endEvent id="myCancelEndEvent">
+  <cancelEventDefinition />
+</endEvent>
+```
+
+* ###### 边界事件（对应 `boundaryEvent` 标签）
+
+边界事件是捕获型事件，依附在活动上。边界事件永远不会抛出。这意味着当活动运行时，事件将监听特定类型的触发器。当捕获到事件时，会终止活动，并沿该事件的出口顺序流继续。
+
+边界事件的xml表述大概如下所示：
+
+```xml
+<boundaryEvent id="myBoundaryEvent" attachedToRef="theActivity">
+  <XXXEventDefinition/>
+</boundaryEvent>
+```
+
+一个边界事件主要由以下部分组成：
+
+* 全局唯一的标识符（即 `boundaryEvent` 标签的 `id` 属性）
+* 对该事件所依附的活动的引用，边界事件及其所依附的活动，应定义在相同级别（即 `boundaryEvent` 的 `attachedToRef` 属性）
+* 事件定义子元素（即 `XXXEventDefinition` 子标签）
+
+* ###### 定时器边界事件（对应含有 `timerEventDefinition` 事件定义的 `boundaryEvent` 标签）
+
+当执行到达边界事件所依附的活动时，将启动定时器。当定时器触发时（例如在特定时间间隔后），可以中断活动，并沿着边界事件的出口顺序流继续执行。
+
+定时器边界事件对应流程图中的图标为：
+
+![bpmn.boundary.timer.event.png](../../img/BPMN/bpmn.boundary.timer.event.png)
+
+定时器边界事件的xml表述如下所示，具体查看[定时器事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<boundaryEvent id="escalationTimer" cancelActivity="true" attachedToRef="firstLineSupport">
+  <timerEventDefinition>
+    <timeDuration>PT4H</timeDuration>
+  </timerEventDefinition>
+</boundaryEvent>
+```
+
+// TODO: 边框是虚线代表什么
+
+中断与非中断定时器事件是不同的。非中断意味着最初的活动不会被中断，而会保持原样。默认为中断行为。在XML表示中，将 `boundaryEvent` 的 `cancelActivity` 属性设置为false。
+
+定时器边界事件只有在异步执行器启用时才能触发，配置启用异步执行器参考[这个链接](集成Spring-Boot.md#配置flowable应用)。
+
+
+
 ###### 事件定义
 
 事件定义（event definition），用于定义事件的语义。没有事件定义的话，事件就“不做什么特别的事情”。例如，一个没有事件定义的开始事件，并不限定具体是什么启动了流程。如果为这个开始事件添加事件定义（例如定时器事件定义），就声明了启动流程的“类型”。
