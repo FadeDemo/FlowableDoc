@@ -460,6 +460,50 @@ runtimeService.startProcessInstanceByMessage(...)
 
 信号启动事件可以选择异步还是同步启动流程实例。
 
+传递给API的信号名是由 `signalEventDefinition` 标签的 `signalRef` 属性引用的 `signal` 标签的name属性值。
+
+信号启动事件对应流程图中的图标为：
+
+![bpmn.start.signal.event.png](../../img/BPMN/bpmn.start.signal.event.png)
+
+信号启动事件的xml表述如下所示，具体查看[信号事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<signal id="theSignal" name="The Signal" />
+
+<process id="processWithSignalStart1">
+  <startEvent id="theStart">
+    <signalEventDefinition id="theSignalEventDefinition" signalRef="theSignal"  />
+  </startEvent>
+  <sequenceFlow id="flow1" sourceRef="theStart" targetRef="theTask" />
+  <userTask id="theTask" name="Task in process A" />
+  <sequenceFlow id="flow2" sourceRef="theTask" targetRef="theEnd" />
+  <endEvent id="theEnd" />
+</process>
+```
+
+// TODO: 补充使用示例
+
+* ###### 错误启动事件（对应含有 `errorEventDefinition` 事件定义的 `startEvent` 标签）
+
+错误启动事件不能用于启动流程实例，但可用于触发事件子流程。
+
+错误启动事件总是中断。
+
+错误启动事件对应流程图中的图标为：
+
+![bpmn.start.error.event.png](../../img/BPMN/bpmn.start.error.event.png)
+
+错误启动事件的xml表述如下所示，具体查看[错误事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<startEvent id="messageStart" >
+    <errorEventDefinition errorRef="someError" />
+</startEvent>
+```
+
+* ###### 结束事件（对应 `endEvent` 标签）
+
 
 
 ###### 事件定义
