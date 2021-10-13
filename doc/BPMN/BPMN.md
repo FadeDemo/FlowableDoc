@@ -608,6 +608,8 @@ runtimeService.startProcessInstanceByMessage(...)
 </endEvent>
 ```
 
+// TODO: 补充使用示例
+
 * ###### 边界事件（对应 `boundaryEvent` 标签）
 
 边界事件是捕获型事件，依附在活动上。边界事件永远不会抛出。这意味着当活动运行时，事件将监听特定类型的触发器。当捕获到事件时，会终止活动，并沿该事件的出口顺序流继续。
@@ -625,6 +627,12 @@ runtimeService.startProcessInstanceByMessage(...)
 * 全局唯一的标识符（即 `boundaryEvent` 标签的 `id` 属性）
 * 对该事件所依附的活动的引用，边界事件及其所依附的活动，应定义在相同级别（即 `boundaryEvent` 的 `attachedToRef` 属性）
 * 事件定义子元素（即 `XXXEventDefinition` 子标签）
+
+边界事件存在的问题：
+
+不能在边界事件上附加多个出口顺序流。这个问题的解决方案，是使用一条出口顺序流，指向[并行网关](// TODO: 补充链接)。
+
+![bpmn.known.issue.boundary.event.png](../../img/BPMN/bpmn.known.issue.boundary.event.png)
 
 * ###### 定时器边界事件（对应含有 `timerEventDefinition` 事件定义的 `boundaryEvent` 标签）
 
@@ -649,6 +657,47 @@ runtimeService.startProcessInstanceByMessage(...)
 中断与非中断定时器事件是不同的。非中断意味着最初的活动不会被中断，而会保持原样。默认为中断行为。在XML表示中，将 `boundaryEvent` 的 `cancelActivity` 属性设置为false。
 
 定时器边界事件只有在异步执行器启用时才能触发，配置启用异步执行器参考[这个链接](集成Spring-Boot.md#配置flowable应用)。
+
+// TODO: 补充使用示例
+
+* ###### 错误边界事件（对应含有 `errorEventDefinition` 事件定义的 `boundaryEvent` 标签）
+
+错误边界事件捕获其所依附的活动范围内抛出的错误。
+
+在嵌入式子流程或调用活动上定义错误边界事件最有意义，因为子流程的范围会包括其中的所有活动。错误可以由错误结束事件抛出。这样的错误会逐层向其上级父范围传播，直到在范围内找到一个匹配错误事件定义的错误边界事件。
+
+当捕获错误事件时，会销毁边界事件定义所在的活动，同时销毁其中所有的当前执行（例如，并行活动，嵌套子流程，等等）。流程执行将沿着边界事件的出口顺序流继续。
+
+错误边界事件对应流程图中的图标为：
+
+![bpmn.boundary.error.event.png](../../img/BPMN/bpmn.boundary.error.event.png)
+
+错误边界事件的xml表述如下所示，具体查看[错误事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<boundaryEvent id="catchError" attachedToRef="mySubProcess">
+  <errorEventDefinition errorRef="myError"/>
+</boundaryEvent>
+```
+
+`errorEventDefinition` 的 `errorRef` 属性可以引用在流程外定义的error元素：
+
+```xml
+<error id="myError" errorCode="123" />
+...
+<process id="myProcess">
+...
+```
+
+错误边界事件的捕获规则为：
+
+* 如果省略了 `errorEventDefinition` 的 `errorRef` 属性，无论 `error` 的 `errorCode` 属性是什么，错误边界事件会捕获所有错误事件。
+* 如果提供了 `errorEventDefinition` 的 `errorRef` 属性，并且其引用了存在的 `error` ，则边界事件只会捕获相同错误代码的错误。
+* 如果提供了 `errorEventDefinition` 的 `errorRef` 属性，但BPMN 2.0文件中没有定义error，则 `errorEventDefinition` 的 `errorRef` 属性会用作 `error` 的 `errorCode` 属性（与错误结束事件类似）。
+
+例子：
+
+![bpmn.boundary.error.example.png](../../img/BPMN/bpmn.boundary.error.example.png)
 
 
 
