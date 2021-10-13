@@ -502,9 +502,73 @@ runtimeService.startProcessInstanceByMessage(...)
 </startEvent>
 ```
 
+// TODO: 补充使用示例
+
 * ###### 结束事件（对应 `endEvent` 标签）
 
+结束事件表示流程或子流程的结束。结束事件是抛出事件。这意味着当流程执行到达结束事件时，会抛出一个结果。
 
+* ###### 空结束事件（对应 `endEvent` 标签）
+
+空结束事件意味着当到达这个事件时，没有特别指定抛出的结果。因此，引擎除了结束当前执行分支之外，不会多做任何事情。
+
+空结束事件对应流程图中的图标为：
+
+![bpmn.none.end.event.png](../../img/BPMN/bpmn.none.end.event.png)
+
+空结束事件的xml表述如下所示：
+
+```xml
+<endEvent id="end" name="my end event" />
+```
+
+* ###### 错误结束事件（对应含有 `errorEventDefinition` 事件定义的 `endEvent` 标签）
+
+当流程执行到达错误结束事件时，结束执行的当前分支，并抛出错误。这个错误可以由匹配的[错误边界中间事件](// TODO: 补充链接)捕获。如果找不到匹配的错误边界事件，将会抛出异常。
+
+错误结束事件对应流程图中的图标为：
+
+![bpmn.error.end.event.png](../../img/BPMN/bpmn.error.end.event.png)
+
+错误结束事件的xml表述如下所示，具体查看[错误事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<endEvent id="myErrorEndEvent">
+  <errorEventDefinition errorRef="myError" />
+</endEvent>
+```
+
+`errorEventDefinition` 的 `errorRef` 属性可以引用在流程外定义的error元素：
+
+```xml
+<error id="myError" errorCode="123" />
+...
+<process id="myProcess">
+...
+```
+
+`error` 的 `errorCode` 属性用于查找匹配的错误捕获边界事件。如果 `errorEventDefinition` 的 `errorRef` 不匹配任何已定义的 `error` ，则该 `errorRef` 会用做 `errorCode` 的快捷方式。这个快捷方式是Flowable特有的。即下面的这两段代码作用是一样的：
+
+```xml
+<error id="myError" errorCode="error123" />
+...
+<process id="myProcess">
+...
+  <endEvent id="myErrorEndEvent">
+    <errorEventDefinition errorRef="myError" />
+  </endEvent>
+...
+```
+
+```xml
+<endEvent id="myErrorEndEvent">
+  <errorEventDefinition errorRef="error123" />
+</endEvent>
+```
+
+但请注意 `errorRef` 必须遵从BPMN 2.0 schema ，且必须是合法的QName //TODO: 待理解
+
+// TODO: 待补充使用示例
 
 ###### 事件定义
 
