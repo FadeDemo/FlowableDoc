@@ -652,9 +652,9 @@ runtimeService.startProcessInstanceByMessage(...)
 </boundaryEvent>
 ```
 
-// TODO: 边框是虚线代表什么
+中断与非中断定时器事件是不同的。非中断意味着最初的活动不会被中断，而会保持原样。默认为中断行为。在XML表示中，非中断需要将 `boundaryEvent` 的 `cancelActivity` 属性设置为false，对应流程图中的图标边框用虚线显示：
 
-中断与非中断定时器事件是不同的。非中断意味着最初的活动不会被中断，而会保持原样。默认为中断行为。在XML表示中，将 `boundaryEvent` 的 `cancelActivity` 属性设置为false。
+![bpmn.non.interrupting.boundary.timer.event.png](../../img/BPMN/bpmn.non.interrupting.boundary.timer.event.png)
 
 定时器边界事件只有在异步执行器启用时才能触发，配置启用异步执行器参考[这个链接](集成Spring-Boot.md#配置flowable应用)。
 
@@ -698,6 +698,430 @@ runtimeService.startProcessInstanceByMessage(...)
 例子：
 
 ![bpmn.boundary.error.example.png](../../img/BPMN/bpmn.boundary.error.example.png)
+
+* 流程定义xml文件 `reviewSalesLead.bpmn20.xml`
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:activiti="http://activiti.org/bpmn"
+	xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" 
+	xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+	xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	targetNamespace="Examples"
+	xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL http://www.omg.org/spec/BPMN/2.0/20100501/BPMN20.xsd">
+	
+	<error id="notEnoughInfoError" errorCode="not_enough_info" />
+	
+   <process id="reviewSaledLead" name="Review sales lead">
+   
+      <startEvent id="theStart" activiti:initiator="initiator" />
+      <sequenceFlow id="flow1" sourceRef="theStart" targetRef="provideNewSalesLead"/>
+      
+      <userTask id="provideNewSalesLead" name="Provide new sales lead" activiti:assignee="${initiator}">
+        <extensionElements>
+          <activiti:formProperty id="customerName" name="Customer name" type="string" required="true"/>
+          <activiti:formProperty id="potentialProfit" name="Potential profit" type="long" />
+          <activiti:formProperty id="details" name="Details" type="string"/>
+        </extensionElements>
+      </userTask>
+      <sequenceFlow id="flow2" sourceRef="provideNewSalesLead" targetRef="reviewSalesLeadSubProcess"/>
+      
+      <subProcess id="reviewSalesLeadSubProcess" name="Review sales lead">
+         
+         <startEvent id="subProcessStart" />
+         <sequenceFlow id="flow3" sourceRef="subProcessStart" targetRef="fork"/>
+         <sequenceFlow id="flow4" sourceRef="fork" targetRef="reviewProfitability"/>
+         
+         <parallelGateway id="fork" />
+         <sequenceFlow id="flow5" sourceRef="fork" targetRef="reviewCustomerRating"/>
+         
+         <userTask id="reviewCustomerRating" name="Review customer rating" activiti:candidateGroups="accountancy" />
+         <sequenceFlow id="flow6" sourceRef="reviewCustomerRating" targetRef="subProcessEnd1"/>
+         
+         <endEvent id="subProcessEnd1" />
+         
+         <userTask id="reviewProfitability" name="Review profitability" activiti:candidateGroups="management">
+           <documentation>
+             ${initiator} has published a new sales lead: ${customerName}. Details: ${details}
+           </documentation> 
+            <extensionElements>
+			        <activiti:formProperty id="notEnoughInformation" name="Do you believe this customer is profitable?" type="enum" required="true">
+			          <activiti:value id="false" name="Yes" />
+			          <activiti:value id="true" name="No (= request more info)" />
+			        </activiti:formProperty>
+            </extensionElements>
+         </userTask>
+         <sequenceFlow id="flow7" sourceRef="reviewProfitability" targetRef="enoughInformationCheck"/>
+         
+         <exclusiveGateway id="enoughInformationCheck" name="Enough information?" />
+         <sequenceFlow id="flow8" sourceRef="enoughInformationCheck" targetRef="notEnoughInformationEnd">
+           <conditionExpression>${notEnoughInformation == 'true'}</conditionExpression>
+         </sequenceFlow>
+         <sequenceFlow id="flow9" sourceRef="enoughInformationCheck" targetRef="subProcessEnd2">
+           <conditionExpression>${notEnoughInformation == 'false'}</conditionExpression>
+         </sequenceFlow>
+         
+         <endEvent id="subProcessEnd2" />
+         <endEvent id="notEnoughInformationEnd">
+            <errorEventDefinition errorRef="notEnoughInfoError" />
+         </endEvent>
+         
+      </subProcess>
+      <sequenceFlow id="flow10" sourceRef="reviewSalesLeadSubProcess" targetRef="storeLeadInCrmSystem"/>
+      
+      <boundaryEvent attachedToRef="reviewSalesLeadSubProcess" cancelActivity="true" id="catchNotEnoughInformationError" >
+         <errorEventDefinition errorRef="notEnoughInfoError" />
+      </boundaryEvent>
+      <sequenceFlow id="flow11" sourceRef="catchNotEnoughInformationError" targetRef="provideAdditionalDetails"/>
+      
+      <userTask id="provideAdditionalDetails" name="Provide additional details" activiti:assignee="${initiator}">
+        <documentation>Provide additional details for ${customerName}.</documentation>
+        <extensionElements>
+          <activiti:formProperty id="details" name="Additional details" type="string" required="true"/>
+        </extensionElements>
+      </userTask>
+      <sequenceFlow id="flow12" sourceRef="provideAdditionalDetails" targetRef="reviewSalesLeadSubProcess"/>
+      
+      <task id="storeLeadInCrmSystem" name="Store lead in CRM system" />
+      <sequenceFlow id="flow13" sourceRef="storeLeadInCrmSystem" targetRef="processEnd"/>
+      
+      <endEvent id="processEnd" />
+      
+   </process>
+   
+   <bpmndi:BPMNDiagram id="sid-628a8d2c-0009-4da0-9c2a-412cf76015a8">
+      <bpmndi:BPMNPlane bpmnElement="reviewSaledLead" id="sid-5cb2f8c3-3889-4a12-8a5b-b8f90551695e">
+         <bpmndi:BPMNShape bpmnElement="theStart" id="theStart_gui">
+            <omgdc:Bounds height="30.0" width="30.0" x="75.0" y="300.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="provideNewSalesLead" id="provideNewSalesLead_gui">
+            <omgdc:Bounds height="80.0" width="100.0" x="165.0" y="275.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="reviewSalesLeadSubProcess" id="reviewSalesLeadSubProcess_gui" isExpanded="true">
+            <omgdc:Bounds height="320.0" width="544.0" x="315.0" y="160.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="subProcessStart" id="subProcessStart_gui">
+            <omgdc:Bounds height="30.0" width="30.0" x="360.0" y="300.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="fork" id="fork_gui">
+            <omgdc:Bounds height="40.0" width="40.0" x="435.0" y="295.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="reviewCustomerRating" id="reviewCustomerRating_gui">
+            <omgdc:Bounds height="80.0" width="100.0" x="517.0" y="210.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="subProcessEnd1" id="subProcessEnd1_gui">
+            <omgdc:Bounds height="28.0" width="28.0" x="670.0" y="236.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="reviewProfitability" id="reviewProfitability_gui">
+            <omgdc:Bounds height="80.0" width="100.0" x="517.0" y="360.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="enoughInformationCheck" id="enoughInformationCheck_gui" isMarkerVisible="true">
+            <omgdc:Bounds height="40.0" width="40.0" x="664.0" y="380.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="subProcessEnd2" id="subProcessEnd2_gui">
+            <omgdc:Bounds height="28.0" width="28.0" x="765.0" y="386.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="notEnoughInformationEnd" id="notEnoughInformationEnd_gui">
+            <omgdc:Bounds height="28.0" width="28.0" x="765.0" y="345.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="provideAdditionalDetails" id="provideAdditionalDetails_gui">
+            <omgdc:Bounds height="80.0" width="100.0" x="660.0" y="525.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="catchNotEnoughInformationError" id="catchNotEnoughInformationError_gui">
+            <omgdc:Bounds height="30.0" width="30.0" x="783.8620689660311" y="465.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="storeLeadInCrmSystem" id="storeLeadInCrmSystem_gui">
+            <omgdc:Bounds height="80.0" width="100.0" x="910.0" y="275.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNShape bpmnElement="processEnd" id="processEnd_gui">
+            <omgdc:Bounds height="28.0" width="28.0" x="1050.0" y="301.0"/>
+         </bpmndi:BPMNShape>
+         <bpmndi:BPMNEdge bpmnElement="flow12" id="flow12_gui">
+            <omgdi:waypoint x="660.0" y="565.0"/>
+            <omgdi:waypoint x="587.0" y="565.0"/>
+            <omgdi:waypoint x="587.0" y="480.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow9" id="flow9_gui">
+            <omgdi:waypoint x="704.0" y="400.0"/>
+            <omgdi:waypoint x="765.0" y="400.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow7" id="flow7_gui">
+            <omgdi:waypoint x="617.0" y="400.0"/>
+            <omgdi:waypoint x="664.0" y="400.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow8" id="flow8_gui">
+            <omgdi:waypoint x="684.0" y="380.0"/>
+            <omgdi:waypoint x="684.5" y="359.0"/>
+            <omgdi:waypoint x="765.0" y="359.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow3" id="flow3_gui">
+            <omgdi:waypoint x="390.0" y="315.0"/>
+            <omgdi:waypoint x="435.0" y="315.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow4" id="flow4_gui">
+            <omgdi:waypoint x="455.0" y="335.0"/>
+            <omgdi:waypoint x="455.5" y="400.0"/>
+            <omgdi:waypoint x="517.0" y="400.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow6" id="flow6_gui">
+            <omgdi:waypoint x="617.0" y="250.0"/>
+            <omgdi:waypoint x="670.0" y="250.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow1" id="flow1_gui">
+            <omgdi:waypoint x="105.0" y="315.0"/>
+            <omgdi:waypoint x="165.0" y="315.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow10" id="flow10_gui">
+            <omgdi:waypoint x="859.0" y="317.0"/>
+            <omgdi:waypoint x="910.0" y="315.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow11" id="flow11_gui">
+            <omgdi:waypoint x="798.0" y="495.0"/>
+            <omgdi:waypoint x="798.8620689660311" y="565.0"/>
+            <omgdi:waypoint x="760.0" y="565.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow2" id="flow2_gui">
+            <omgdi:waypoint x="265.0" y="315.0"/>
+            <omgdi:waypoint x="290.0" y="315.0"/>
+            <omgdi:waypoint x="315.0" y="316.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow13" id="flow13_gui">
+            <omgdi:waypoint x="1010.0" y="315.0"/>
+            <omgdi:waypoint x="1050.0" y="315.0"/>
+         </bpmndi:BPMNEdge>
+         <bpmndi:BPMNEdge bpmnElement="flow5" id="flow5_gui">
+            <omgdi:waypoint x="455.0" y="295.0"/>
+            <omgdi:waypoint x="455.5" y="250.0"/>
+            <omgdi:waypoint x="517.0" y="250.0"/>
+         </bpmndi:BPMNEdge>
+      </bpmndi:BPMNPlane>
+   </bpmndi:BPMNDiagram>
+</definitions>
+```
+
+* Java代码
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs;
+
+import cn.hutool.core.lang.Assert;
+import org.fade.demo.flowabledemo.bpmn.util.DBUtil;
+import org.flowable.common.engine.impl.identity.Authentication;
+import org.flowable.engine.*;
+import org.flowable.engine.impl.cfg.StandaloneProcessEngineConfiguration;
+import org.flowable.engine.repository.Deployment;
+import org.flowable.task.api.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.flowable.engine.impl.test.TestHelper.assertProcessEnded;
+
+/**
+ * @author fade
+ * @date 2021/10/13
+ */
+public class Main {
+
+    private static final Logger logger = LoggerFactory.getLogger(Main.class);
+
+    public static void main(String[] args) {
+        logger.info("开始执行流程");
+        // 设置认证用户 kermit被保存至initiator变量
+        Authentication.setAuthenticatedUserId("kermit");
+        // 获取引擎配置
+        ProcessEngineConfiguration cfg = new StandaloneProcessEngineConfiguration()
+                .setJdbcUrl(DBUtil.getJdbcUrl())
+                .setJdbcUsername(DBUtil.getUsername())
+                .setJdbcPassword(DBUtil.getPassword())
+                .setJdbcDriver("org.h2.Driver")
+                .setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE);
+        // 获取引擎
+        ProcessEngine processEngine = cfg.buildProcessEngine();
+        // 部署流程定义
+        RepositoryService repositoryService = processEngine.getRepositoryService();
+        Deployment deployment = repositoryService.createDeployment()
+                .addClasspathResource("constructs/reviewSalesLead.bpmn20.xml")
+                .deploy();
+        // 启动流程实例
+        Map<String, Object> variables = new HashMap<>(16);
+        variables.put("details", "very interesting");
+        variables.put("customerName", "Alfresco");
+        RuntimeService runtimeService = processEngine.getRuntimeService();
+        String procId = runtimeService.startProcessInstanceByKey("reviewSaledLead", variables).getId();
+        // 处理第一个用户任务
+        TaskService taskService = processEngine.getTaskService();
+        Task task = taskService.createTaskQuery().taskAssignee("kermit").processInstanceId(procId).singleResult();
+        Assert.isTrue(task.getName().equals("Provide new sales lead"));
+        taskService.complete(task.getId());
+        // 进入子流程
+        // 查询会计组用户任务
+        Task ratingTask = taskService.createTaskQuery().taskCandidateGroup("accountancy").processInstanceId(procId).singleResult();
+        Assert.isTrue(ratingTask.getName().equals("Review customer rating"));
+        // 处理经理组用户任务
+        Task profitabilityTask = taskService.createTaskQuery().taskCandidateGroup("management").processInstanceId(procId).singleResult();
+        Assert.isTrue(profitabilityTask.getName().equals("Review profitability"));
+        variables = new HashMap<>(16);
+        // 设置为信息不足够，走向错误结束事件
+        variables.put("notEnoughInformation", true);
+        taskService.complete(profitabilityTask.getId(), variables);
+        // 被错误边界事件捕获后走向提供额外信息的用户任务
+        Task provideDetailsTask = taskService.createTaskQuery().taskAssignee("kermit").processInstanceId(procId).singleResult();
+        Assert.isTrue(provideDetailsTask.getName().equals("Provide additional details"));
+        taskService.complete(provideDetailsTask.getId());
+        // 重新进入子流程
+        List<Task> reviewTasks = taskService.createTaskQuery().orderByTaskName().asc().processInstanceId(procId).list();
+        assertThat(reviewTasks)
+                .extracting(Task::getName)
+                .containsExactly("Review customer rating", "Review profitability");
+        // 完成会计组和经理组的用户任务
+        taskService.complete(reviewTasks.get(0).getId());
+        variables.put("notEnoughInformation", false);
+        taskService.complete(reviewTasks.get(1).getId(), variables);
+        // 判断流程是否结束
+        assertProcessEnded(processEngine, procId);
+        // 销毁认证用户
+        Authentication.setAuthenticatedUserId(null);
+        logger.info("执行流程完毕");
+    }
+
+}
+```
+
+上面的示例中当“审核盈利能力”的用户任务完成后，如果指定的信息不足，流程则会走向错误结束事件。错误结束事件会结束当前分支的执行，并抛出一个错误，错误会被边界错误事件捕获，流程将沿着边界事件的出口顺序继续执行至“提供更多信息”的用户任务。
+
+// FIXME: 流程图“提供更多信息”是一个用户任务
+
+* ###### 信号边界事件（对应含有 `signalEventDefinition` 事件定义的 `boundaryEvent` 标签）
+
+信号边界事件依附在活动边界上捕获信号。
+
+注意信号边界事件不只是可以捕获其所依附范围内抛出的信号，它可以捕获全局范围内抛出的信号。
+
+与其他事件（如错误事件）不同，信号在被捕获后不会被消耗。如果有两个信号边界事件捕获了相同的信号，则两个边界事件都会被触发，哪怕它们不在同一个流程实例里。
+
+信号边界事件对应流程图中的图标为：
+
+![bpmn.boundary.signal.event.png](../../img/BPMN/bpmn.boundary.signal.event.png)
+
+信号边界事件的xml表述如下所示，具体查看[信号事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<boundaryEvent id="boundary" attachedToRef="task" cancelActivity="true">
+    <signalEventDefinition signalRef="alertSignal"/>
+</boundaryEvent>
+```
+
+// TODO: 补充使用示例
+
+* ###### 消息边界事件（对应含有 `messageEventDefinition` 事件定义的 `boundaryEvent` 标签）
+
+在活动边界上的捕获消息。
+
+消息边界事件对应流程图中的图标为：
+
+![bpmn.boundary.message.event.png](../../img/BPMN/bpmn.boundary.message.event.png)
+
+
+由上面的图标可以得知消息边界事件也有中断和非中断的区别，也是通过 `boundaryEvent` 标签的 `cancelActivity` 属性设置。
+
+消息边界事件的xml表述如下所示，具体查看[消息事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<boundaryEvent id="boundary" attachedToRef="task" cancelActivity="true">
+    <messageEventDefinition messageRef="newCustomerMessage"/>
+</boundaryEvent>
+```
+
+// TODO: 补充使用示例
+
+* ###### 取消边界事件（对应含有 `cancelEventDefinition` 事件定义的 `boundaryEvent` 标签）
+
+依附在事务子流程边界上捕获取消事件。
+
+取消边界事件在在事务被取消时触发，当它被触发时，会中断当前范围的所有活动执行。接下来，它会为事务范围内所有有效的补偿边界事件开始补偿。补偿会同步执行，也就是说在离开事务前，边界事件会等待补偿完成。当补偿完成时，沿取消边界事件的任何出口顺序流离开事务子流程。// TODO: 待理解 补偿
+
+一个事务子流程只允许使用一个取消边界事件。
+
+如果事务子流程中有嵌套的子流程，只会对成功完成的子流程触发补偿。
+
+如果取消边界事件放置在具有多实例特性的事务子流程上，如果一个实例触发了取消，则边界事件将取消所有实例。
+
+取消边界事件对应流程图中的图标为：
+
+![bpmn.boundary.cancel.event.png](../../img/BPMN/bpmn.boundary.cancel.event.png)
+
+取消边界事件的xml表述如下所示:
+
+```xml
+<boundaryEvent id="boundary" attachedToRef="transaction" >
+  <cancelEventDefinition />
+</boundaryEvent>
+```
+
+取消边界事件总是中断型的，因此它没有cancelActivity属性
+
+* ###### 补偿边界事件（对应含有 `compensateEventDefinition` 事件定义的 `boundaryEvent` 标签）
+
+依附在活动边界上的捕获补偿事件，可以为活动附加补偿处理器。
+
+补偿边界事件必须使用直接关联的方式引用单个补偿处理器。
+
+补偿边界事件与其它边界事件的激活策略不同。其它边界事件，例如信号边界事件，在其依附的活动启动时激活；当该活动结束时会被解除，并取消相应的事件订阅。而补偿边界事件不是这样。补偿边界事件在其依附的活动成功完成时激活，同时创建补偿事件的相应订阅。当补偿事件被触发，或者相应的流程实例结束时，才会移除订阅。
+
+总的来说，补偿边界事件遵循以下几个原则：
+
+* 当补偿被触发时，会调用补偿边界事件关联的补偿处理器。调用次数与其依附的活动成功完成的次数相同。
+* 如果补偿边界事件依附在具有多实例特性的活动上，则会为每一个实例创建补偿事件订阅。
+* 如果补偿边界事件依附在位于循环内部的活动上，则每次该活动执行时，都会创建一个补偿事件订阅。
+* 如果流程实例结束，则取消补偿事件的订阅。
+* 在嵌入式子流程上不支持补偿边界事件。
+
+补偿边界事件是捕获型事件。
+
+补偿边界事件对应流程图中的图标为：
+
+![bpmn.boundary.compensation.event.png](../../img/BPMN/bpmn.boundary.compensation.event.png)
+
+上面的图标中，补偿边界事件使用了单向连接关联补偿处理器。
+
+补偿边界事件的xml表述如下所示:
+
+```xml
+<boundaryEvent id="compensateBookHotelEvt" attachedToRef="bookHotel" >
+    <compensateEventDefinition />
+</boundaryEvent>
+
+<association associationDirection="One" id="a1"
+    sourceRef="compensateBookHotelEvt" targetRef="undoBookHotel" />
+
+<serviceTask id="undoBookHotel" isForCompensation="true" flowable:class="..." />
+```
+
+补偿边界事件在活动完成后才激活，因此也不支持cancelActivity属性。
+
+* ###### 中间捕获事件（对应 `intermediateCatchEvent` 标签）
+
+中间捕获事件的xml表述如下所示：
+
+```xml
+<intermediateCatchEvent id="myIntermediateCatchEvent" >
+  <XXXEventDefinition/>
+</intermediateCatchEvent>
+```
+
+中间捕获事件由下列元素定义：
+
+* 唯一的标识符，对应 `intermediateCatchEvent` 的 `id` 属性
+* 定义了中间捕获事件类型的，形如 `XXXEventDefinition` 的XML子元素（例如 `TimerEventDefinition` 等）。
+
+* ###### 定时器中间捕获事件（对应含有 `timerEventDefinition` 事件定义的 `intermediateCatchEvent` 标签）
 
 
 
