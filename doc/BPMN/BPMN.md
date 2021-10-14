@@ -1123,6 +1123,143 @@ public class Main {
 
 * ###### 定时器中间捕获事件（对应含有 `timerEventDefinition` 事件定义的 `intermediateCatchEvent` 标签）
 
+当流程执行到定时器中间捕获事件时，启动定时器；当定时器触发时（例如在一段时间间隔后），流程将沿定时器中间捕获事件的出口顺序流继续执行。
+
+定时器中间捕获事件对应流程图中的图标为：
+
+![bpmn.intermediate.timer.event.png](../../img/BPMN/bpmn.intermediate.timer.event.png)
+
+定时器中间捕获事件的xml表述如下所示，具体查看[定时器事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<intermediateCatchEvent id="timer">
+  <timerEventDefinition>
+    <timeDuration>PT5M</timeDuration>
+  </timerEventDefinition>
+</intermediateCatchEvent>
+```
+
+// TODO: 补充使用示例
+
+* ###### 信号中间捕获事件（对应含有 `signalEventDefinition` 事件定义的 `intermediateCatchEvent` 标签）
+
+信号中间捕获事件，捕获与其引用的信号事件定义具有相同信号名称的信号。
+
+与其它事件不同，信号在被捕获后不会被消耗。如果有两个激活的信号中间捕获事件，他们捕获相同的信号事件，则两个中间事件都会被触发，哪怕它们不在同一个流程实例里。
+
+信号中间捕获事件对应流程图中的图标为：
+
+![bpmn.intermediate.signal.catch.event.png](../../img/BPMN/bpmn.intermediate.signal.catch.event.png)
+
+信号中间捕获事件的xml表述如下所示，具体查看[信号事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<intermediateCatchEvent id="signal">
+  <signalEventDefinition signalRef="newCustomerSignal" />
+</intermediateCatchEvent>
+```
+
+// TODO: 补充使用示例
+
+* ###### 消息中间捕获事件（对应含有 `messageEventDefinition` 事件定义的 `intermediateCatchEvent` 标签）
+
+消息中间捕获事件捕获特定名字的消息。
+
+消息中间捕获事件对应流程图中的图标为：
+
+![bpmn.intermediate.message.catch.event.png](../../img/BPMN/bpmn.intermediate.message.catch.event.png)
+
+消息中间捕获事件的xml表述如下所示，具体查看[消息事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<intermediateCatchEvent id="message">
+  <messageEventDefinition signalRef="newCustomerMessage" />
+</intermediateCatchEvent>
+```
+
+// TODO: 补充使用示例
+
+* ###### 中间抛出事件（对应 `intermediateThrowEvent` 标签）
+
+中间抛出事件的xml表述如下所示：
+
+```xml
+<intermediateThrowEvent id="myIntermediateThrowEvent" >
+  <XXXEventDefinition/>
+</intermediateThrowEvent>
+```
+
+中间抛出事件由下列元素定义：
+
+* 唯一的标识符，对应 `intermediateThrowEvent` 的 `id` 属性
+* 定义了中间捕获事件类型的，形如 `XXXEventDefinition` 的XML子元素（例如 `TimerEventDefinition` 等）。
+
+* ###### 空中间抛出事件（对应没有事件定义的 `intermediateThrowEvent` 标签）
+
+空中间抛出事件一般用于指示流程已经到达了某种状态。
+
+空中间抛出事件虽然没有事件定义的子元素，但是可以给它添加执行监听器用于监控作用。在这种情况下，引擎本身不会做任何事情，只是从中穿过。
+
+如：
+
+```xml
+<intermediateThrowEvent id="noneEvent">
+  <extensionElements>
+    <flowable:executionListener class="org.flowable.engine.test.bpmn.event.IntermediateNoneEventTest$MyExecutionListener" event="start" />
+  </extensionElements>
+</intermediateThrowEvent>
+```
+
+// TODO: 补充使用示例
+
+* ###### 信号中间抛出事件（对应含有 `signalEventDefinition` 事件定义的 `intermediateThrowEvent` 标签）
+
+信号抛出中间事件，抛出所定义的信号。
+
+在flowable中，信号会广播至所有的激活的处理器（也就是说，所有的信号捕获事件）。flowable可以同步或异步地发布信号。
+
+在默认配置中，信号是同步进行传递的。这意味着抛出信号的流程实例会等待，直到信号传递至所有的捕获信号的流程实例中。所有的捕获流程实例也会在与抛出流程实例相同的事务中，也就是说如果收到通知的流程实例中，有一个实例抛出了异常，则所有相关的实例都会失败。
+
+信号也可以异步进行传递。这是由到达抛出信号事件时的发送处理器来决定的。对于每个激活的处理器，JobExecutor会为其存储并传递一个异步通知消息,即作业（Job）。 // TODO: 待理解
+
+信号中间抛出事件对应流程图中的图标为：
+
+![bpmn.intermediate.signal.throw.event.png](../../img/BPMN/bpmn.intermediate.signal.throw.event.png)
+
+信号中间抛出事件的xml表述如下所示，具体查看[信号事件定义](// TODO: 补充链接)部分内容：
+
+```xml
+<intermediateThrowEvent id="signal">
+  <signalEventDefinition signalRef="newCustomerSignal" />
+</intermediateThrowEvent>
+```
+
+如果你想使信号异步进行传递，你可以为信号事件定义设置 `flowable:async` 属性为 `true` 来实现：
+
+```xml
+<intermediateThrowEvent id="signal">
+  <signalEventDefinition signalRef="newCustomerSignal" flowable:async="true" />
+</intermediateThrowEvent>
+```
+
+// TODO: 待补充使用示例
+
+* ###### 补偿中间抛出事件（对应含有 `compensateEventDefinition` 事件定义的 `intermediateThrowEvent` 标签）
+
+补偿中间抛出事件用于触发补偿。
+
+触发补偿：既可以为设计的活动触发补偿，也可以为补偿事件所在的范围触发补偿。补偿由活动所关联的补偿处理器执行。
+
+* 活动抛出补偿时，活动关联的补偿处理器将执行的次数，为活动成功完成的次数。
+* 抛出补偿时，当前范围中所有的活动，包括并行分支上的活动都会被补偿。
+* 补偿分层触发：如果将要被补偿的活动是一个子流程，则该子流程中所有的活动都会触发补偿。如果该子流程有嵌套的活动，则会递归地抛出补偿。然而，补偿不会传播至流程的上层：如果子流程中触发了补偿，该补偿不会传播至子流程范围外的活动。BPMN规范指出，对“与子流程在相同级别”的活动触发补偿。
+* 在flowable中，补偿按照执行的相反顺序运行。这意味着最后完成的活动会第一个补偿。
+* 可以使用补偿抛出中间事件补偿已经成功完成的事务子流程。
+
+如果抛出补偿的范围中有一个子流程，而该子流程包含有关联了补偿处理器的活动，则当抛出补偿时，只有该子流程成功完成时，补偿才会传播至该子流程。如果子流程内嵌套的部分活动已经完成，并附加了补偿处理器，但包含这些活动的子流程还没有完成，则这些补偿处理器仍不会执行。
+
+![bpmn.throw.compensation.example1.png](../../img/BPMN/bpmn.throw.compensation.example1.png)
+
 
 
 ###### 事件定义
