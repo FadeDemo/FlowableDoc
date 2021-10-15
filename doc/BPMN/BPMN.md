@@ -1260,7 +1260,41 @@ public class Main {
 
 ![bpmn.throw.compensation.example1.png](../../img/BPMN/bpmn.throw.compensation.example1.png)
 
+上面的流程中，有两条并行的执行。其中一条执行子流程，并在 `review bookings` 用户任务处停止；另外一条执行 `charge credit card` 服务任务。假设 `charge credit card` 这个服务任务执行时抛出了错误，那么它将被依附在其边界上的错误边界事件捕获，沿着错误边界事件的出口执行，从而抛出补偿事件。但如果此时另一条执行的用户任务 `review bookings` 没有完成，这便意味着子流程也没有成功完成，此时补偿是不会传播至这个子流程的。
 
+当补偿嵌入式子流程时，用于执行补偿处理器的执行，可以访问子流程的局部流程变量在子流程完成时的值。为此，会对范围内的执行（为执行子流程所创建的执行）所关联的流程变量进行快照。这意味着：
+
+* 补偿执行器无法访问子流程范围内并行执行所添加的变量。
+* 上层执行所关联的流程变量（例如流程实例关联的流程变量）不在该快照中。因为补偿处理器可以直接访问这些流程变量在抛出补偿时的值。
+* 只会为嵌入式子流程进行变量快照。其他活动不会进行变量快照。
+
+但是目前补偿中间抛出事件有一些限制：
+
+* 目前不支持 `waitForCompletion="false"` 。当补偿中间抛出事件触发补偿时，只有在补偿成功完成时，才会离开该事件。
+* 补偿由并行执行运行。并行执行会按照补偿活动完成的逆序启动。
+* 补偿不会传播至调用活动（// TODO: 理解调用活动是什么）生成的子流程。
+
+补偿中间抛出事件对应流程图中的图标为：
+
+![bpmn.intermediate.compensation.throw.event.png](../../img/BPMN/bpmn.intermediate.compensation.throw.event.png)
+
+补偿中间抛出事件的xml表述如下所示:
+
+```xml
+<intermediateThrowEvent id="throwCompensation">
+  <compensateEventDefinition />
+</intermediateThrowEvent>
+```
+
+另外， `compensateEventDefinition` 标签的 `activityRef` 属性可用于为指定的范围或活动触发补偿：
+
+```xml
+<intermediateThrowEvent id="throwCompensation">
+  <compensateEventDefinition activityRef="bookHotel" />
+</intermediateThrowEvent>
+```
+
+// TODO: 补充使用示例
 
 ###### 事件定义
 
@@ -1268,8 +1302,236 @@ public class Main {
 
 * ###### 定时器事件定义
 
-定时器事件（ `timerEventDefinition` ），是由定时器所触发的事件。可以用于开始事件，中间事件，或边界事件。定时器事件的行为取决于所使用的业务日历（business calendar）。定时器事件有默认的业务日历，但也可以为每个定时器事件单独定义业务日历。
+定时器事件（对应 `timerEventDefinition` 标签），是由定时器所触发的事件。可以用于[开始事件](#开始事件-对应-startEvent-标签)，中间事件，或[边界事件](#边界事件-对应-boundaryEvent-标签)。定时器事件的行为取决于所使用的业务日历（business calendar）。定时器事件有默认的业务日历，但也可以为每个定时器事件单独定义业务日历。
 
+```xml
+<timerEventDefinition flowable:businessCalendarName="custom">
+    ...
+</timerEventDefinition>
+```
 
-// TODO: 补充开始事件、中间事件和边界事件链接
+其中 `timerEventDefinition` 的 `flowable:businessCalendarName` 属性指向流程引擎配置中的业务日历。如果省略业务日历定义，则使用默认业务日历。
+
+定时器定义必须且只能包含下列的一种元素:
+
+* `timeDate` 这个元素指定了[ISO 8601格式](https://en.wikipedia.org/wiki/ISO_8601#Dates)的固定时间，在这个时间就会触发触发器。
+
+```xml
+<timerEventDefinition>
+  <timeDate>2011-03-11T12:13:14</timeDate>
+</timerEventDefinition>
+```
+
+* `timeDuration` 定义了定时器需要等待多长时间再触发，也使用了[ISO 8601格式](https://en.wikipedia.org/wiki/ISO_8601#Durations)
+
+```xml
+<timerEventDefinition>
+    <timeDuration>P10D</timeDuration>
+</timerEventDefinition>
+```
+
+* `timeCycle` 指定重复周期，可用于周期性启动流程，或者为超期用户任务多次发送提醒。既可以使用[ISO 8601格式](https://en.wikipedia.org/wiki/ISO_8601#Repeating_intervals)，也可以使用[cron表达式](https://github.com/FadeDemo/QuartzDoc/blob/main/doc/tutorials-lesson6.md)指定定时周期。你可以通过 `timeCycle` 标签的 `flowable:endDate` 属性值或在事件表达式（如： `R3/PT10H/${EndDate}` ， `${EndDate}` 是一个流程变量）中指出结束时间，如果两者都指定了，优先 `flowable:endDate` 属性。目前只有定时器边界事件和定时器捕获事件支持配置结束时间。
+
+```xml
+<timerEventDefinition>
+  <timeCycle flowable:endDate="2015-02-25T16:42:11+00:00">R3/PT10H</timeCycle>
+</timerEventDefinition>
+
+<timerEventDefinition>
+  <timeCycle>R3/PT10H/${EndDate}</timeCycle>
+</timerEventDefinition>
+```
+
+重复时间周期更适合使用相对时间，也就是从某个特定时间点开始计算（比如用户任务开始的时间）。而cron表达式可以使用绝对时间，因此更适合用于定时启动事件。
+
+可以在定时事件定义中使用表达式，也就是使用流程变量控制定时。这个流程变量必须是包含合适时间格式的字符串，ISO 8601（或者循环类型的cron表达式）。另外， `timeDuration` 元素还可以使用 `java.time.Duration` 类型的流程变量。
+
+定时器只有在异步执行器启用时才能触发，这需要你在[配置文件中配置](集成Spring-Boot.md#配置flowable应用)。
+
+// TODO: 补充使用示例
+
+* ###### 错误事件定义
+
+对应 `errorEventDefinition` 标签。
+
+注意，BPMN错误与Java异常不是一回事。
+
+对应的xml表述如下所示：
+
+```xml
+<endEvent id="myErrorEndEvent">
+  <errorEventDefinition errorRef="myError" />
+</endEvent>
+```
+
+// TODO: 补充使用示例
+
+* ###### 信号事件定义
+
+信号事件，对应 `signalEventDefinition` 标签，是引用具名信号的事件。信号是全局范围的事件，并会被传递给所有激活的处理器。
+
+ `signalEventDefinition` 标签的 `signalRef` 属性引用一个 `signal` 元素，该 `signal` 元素需要声明为 `definitions` 根元素的子元素。
+
+其xml表述如下所示：
+
+```xml
+<definitions... >
+  <!-- declaration of the signal -->
+  <signal id="alertSignal" name="alert" />
+
+  <process id="catchSignal">
+    <intermediateThrowEvent id="throwSignalEvent" name="Alert">
+      <!-- signal event definition -->
+      <signalEventDefinition signalRef="alertSignal" />
+    </intermediateThrowEvent>
+    ...
+    <intermediateCatchEvent id="catchSignalEvent" name="On Alert">
+      <!-- signal event definition -->
+      <signalEventDefinition signalRef="alertSignal" />
+    </intermediateCatchEvent>
+    ...
+  </process>
+</definitions>
+```
+
+除了在流程定义文件里定义抛出事件抛出信号，你也可以通过Java API抛出一个信号：
+
+```java
+RuntimeService.signalEventReceived(String signalName);
+RuntimeService.signalEventReceived(String signalName, String executionId);
+```
+
+上面的方法的区别在于前者在全局范围为所有已订阅处理器抛出信号，而后者只为指定的执行传递信号。
+
+你还可以通过Java API查询信号事件订阅：
+
+```java
+List<Execution> executions = runtimeService.createExecutionQuery()
+      .signalEventSubscriptionName("alert")
+      .list();
+```
+
+如果你希望限制信号事件的范围，可以为 `signal` 标签添加 `flowable:scope` 属性，该属性默认为 `global` (全局)，设置为 `processInstance` 可以使只在同一个流程实例中响应信号事件。
+
+```xml
+<signal id="alertSignal" name="alert" flowable:scope="processInstance"/>
+```
+
+// TODO: 补充使用示例
+
+* ###### 消息事件定义
+
+对应 `messageEventDefinition` 标签。
+
+消息事件，是指引用具名消息的事件。消息具有名字与载荷。与信号不同，消息事件只有一个接收者。
+
+`messageEventDefinition` 标签的 `messageRef` 属性引用一个 `message` 元素，该 `message` 元素需要声明为 `definitions` 根元素的子元素。
+
+其xml表述如下所示：
+
+```xml
+<definitions id="definitions"
+  xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:flowable="http://flowable.org/bpmn"
+  targetNamespace="Examples"
+  xmlns:tns="Examples">
+
+  <message id="newInvoice" name="newInvoiceMessage" />
+  <message id="payment" name="paymentMessage" />
+
+  <process id="invoiceProcess">
+
+    <startEvent id="messageStart" >
+        <messageEventDefinition messageRef="newInvoice" />
+    </startEvent>
+    ...
+    <intermediateCatchEvent id="paymentEvt" >
+        <messageEventDefinition messageRef="payment" />
+    </intermediateCatchEvent>
+    ...
+  </process>
+
+</definitions>
+```
+
+你可以通过下面的Java API使用消息启动流程实例：
+
+```java
+ProcessInstance startProcessInstanceByMessage(String messageName);
+ProcessInstance startProcessInstanceByMessage(String messageName, Map<String, Object> processVariables);
+ProcessInstance startProcessInstanceByMessage(String messageName, String businessKey,
+    Map<String, Object> processVariables);
+```
+
+flowable的 `RuntimeService` 也提供了下列Java API触发订阅了消息事件的执行：
+
+```java
+void messageEventReceived(String messageName, String executionId);
+void messageEventReceived(String messageName, String executionId, HashMap<String, Object> processVariables);
+```
+
+对于消息启动事件，可以通过下列的Java API查询消息事件订阅：
+
+```java
+ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
+      .messageEventSubscription("newCallCenterBooking")
+      .singleResult();
+```
+
+因为一个消息只能被一个流程定义订阅，因此上面这个查询总是返回0或1个结果。如果流程定义更新了，只有该流程定义的最新版本会订阅这个消息事件。
+
+对于消息捕获中间事件，可以通过下列的Java API查询事件订阅：
+
+```java
+Execution execution = runtimeService.createExecutionQuery()
+      .messageEventSubscriptionName("paymentReceived")
+      .variableValueEquals("orderId", message.getOrderId())
+      .singleResult();
+```
+
+// TODO: 补充使用示例
+
+### 顺序流
+
+###### 描述
+
+顺序流用来连接流程的两个元素，在流程执行过程中，一个元素被访问后，会沿着其所有出口顺序流继续执行。这意味着BPMN 2.0默认是允许并行执行的：有两个出口顺序流就会创建两个独立的、并行的执行路径。
+
+###### 图标
+
+![bpmn.sequence.flow.png](../../img/BPMN/bpmn.sequence.flow.png)
+
+图标的箭头总是指向目标元素。
+
+###### xml表述
+
+```xml
+<sequenceFlow id="flow1" sourceRef="theStart" targetRef="theTask" />
+```
+
+顺序流需要有流程唯一的 `id` 属性值，并引用存在的源(对应 `sourceRef` 属性)与目标元素(对应 `targetRef` 属性)。
+
+###### 条件顺序流
+
+对应含有 `conditionExpression` 元素的 `sequenceFlow` 标签
+
+即在顺序流上定义条件，当条件计算为 `true` 时，选择该出口顺序流。但是注意对于网关，会用不同方式处理条件顺序流。
+
+条件顺序流对应流程图的图标为：
+
+![bpmn.conditional.sequence.flow.png](../../img/BPMN/bpmn.conditional.sequence.flow.png)
+
+条件顺序流对应的xml表述如下所示：
+
+```xml
+<sequenceFlow id="flow" sourceRef="theStart" targetRef="theTask">
+  <conditionExpression xsi:type="tFormalExpression">
+    <![CDATA[${order.price > 100 && order.price < 250}]]>
+  </conditionExpression>
+</sequenceFlow>
+```
+
+但是 `conditionExpression` 目前只支持 `tFormalExpressions` 。可以省略 `xsi:type=""` 定义，默认为唯一支持的表达式类型。
+
+目前 `conditionalExpression` 只能使用UEL。详细信息可以在[表达式章节](Flowable-API.md#表达式)找到。使用的表达式需要能解析为boolean值，否则当计算条件时会抛出异常。
 
