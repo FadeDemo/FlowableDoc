@@ -1535,3 +1535,445 @@ Execution execution = runtimeService.createExecutionQuery()
 
 目前 `conditionalExpression` 只能使用UEL。详细信息可以在[表达式章节](Flowable-API.md#表达式)找到。使用的表达式需要能解析为boolean值，否则当计算条件时会抛出异常。
 
+// TODO: 待补充示例
+
+###### 默认顺序流
+
+所有的任务和网关可以有一个默认顺序流。只有当没有其他顺序流可以选择时，才会选择默认顺序流作为活动的出口顺序流。流程会忽略默认顺序流上的条件。
+
+默认顺序流对应流程图中的图标为：
+
+![bpmn.default.sequence.flow.png](../../img/BPMN/bpmn.default.sequence.flow.png)
+
+默认顺序流通过活动上的 `default` 属性指定：
+
+```xml
+<exclusiveGateway id="exclusiveGw" name="Exclusive Gateway" default="flow2" />
+
+<sequenceFlow id="flow1" sourceRef="exclusiveGw" targetRef="task1">
+    <conditionExpression xsi:type="tFormalExpression">${conditionA}</conditionExpression>
+</sequenceFlow>
+
+<sequenceFlow id="flow2" sourceRef="exclusiveGw" targetRef="task2"/>
+
+<sequenceFlow id="flow3" sourceRef="exclusiveGw" targetRef="task3">
+    <conditionExpression xsi:type="tFormalExpression">${conditionB}</conditionExpression>
+</sequenceFlow>
+```
+
+上面的xml代码中定义了一个[排他网关](// TODO: 补充链接)，它连接着3条顺序流，当conditionA和conditionB都为false时，它会选择flow2作为活动的出口顺序。
+
+// TODO: 待补充示例
+
+### 网关
+
+网关用于控制执行（BPMN 2.0 中的 `token`）的流向，网关可以消费和生产执行。
+
+网关对应流程图中的图标为：
+
+![bpmn.gateway.png](../../img/BPMN/bpmn.gateway.png)
+
+###### 排他网关
+
+对应 `exclusiveGateway` 标签
+
+排他网关（异或网关或着基于数据的排他网关）对流程中的决策进行建模，会对所有顺序流按它们定义的顺序进行计算， **第一个条件计算结果为true的顺序流（没有条件认为是true）** 将作为活动的出口。当没有顺序流可选时，将抛出一个异常。
+
+排他网关对应流程图中的图标为：
+
+![bpmn.exclusive.gateway.notation.png](../../img/BPMN/bpmn.exclusive.gateway.notation.png)
+
+上面图片中左边的图标也是排他网关，但是BPMN 2.0 标准不允许上面的两种图标同时使用。（// TODO: 上图左边的图标对应在xml中是什么）
+
+排他网关对应的xml表述如下所示：
+
+```xml
+<exclusiveGateway id="exclusiveGw" name="Exclusive Gateway" />
+
+<sequenceFlow id="flow2" sourceRef="exclusiveGw" targetRef="theTask1">
+  <conditionExpression xsi:type="tFormalExpression">${input == 1}</conditionExpression>
+</sequenceFlow>
+
+<sequenceFlow id="flow3" sourceRef="exclusiveGw" targetRef="theTask2">
+  <conditionExpression xsi:type="tFormalExpression">${input == 2}</conditionExpression>
+</sequenceFlow>
+
+<sequenceFlow id="flow4" sourceRef="exclusiveGw" targetRef="theTask3">
+  <conditionExpression xsi:type="tFormalExpression">${input == 3}</conditionExpression>
+</sequenceFlow>
+```
+
+上面的xml代码展示为流程图是这个样子的：
+
+![bpmn.exclusive.gateway.png](../../img/BPMN/bpmn.exclusive.gateway.png)
+
+###### 并行网关
+
+对应 `parallelGateway` 标签，一般用来对流程中的并行执行建模。
+
+并行网关有两种行为，采取哪种行为是由顺序流决定的：
+
+* `fork` 所有的 **出口顺序流** 都并行执行，为每一条顺序流创建一个并行执行。当所有的顺序流上的执行都到达结束事件后，该网关所属的流程才被认为是结束。
+* `join` 所有到达并行网关的并行执行都会在网关处等待，直到每一条 **入口顺序流** 都到了网关。然后流程经过网关合并后继续。
+
+对于一个并行网关，上述的两种行为可以同时存在，只要同时有多条出口顺序流和多条入口顺序流连接在它上面。
+
+并行网关不计算顺序流上的条件，如果顺序流上定义了条件，并行网关会忽略它。
+
+并行网关对于流程图中的图标为：
+
+![bpmn.parallel.gateway.png](../../img/BPMN/bpmn.parallel.gateway.png)
+
+并行网关对应的xml表述如下所示：
+
+```xml
+<parallelGateway id="myParallelGateway" />
+```
+
+例子：
+
+以上面的流程图为例
+
+* Java代码
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs;
+
+import org.fade.demo.flowabledemo.bpmn.util.DBUtil;
+import org.flowable.engine.*;
+import org.flowable.engine.impl.cfg.StandaloneProcessEngineConfiguration;
+import org.flowable.engine.repository.Deployment;
+import org.flowable.engine.runtime.ProcessInstance;
+import org.flowable.task.api.Task;
+import org.flowable.task.api.TaskQuery;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * @author fade
+ * @date 2021/10/15
+ */
+public class ParallelGateway {
+
+    public static void main(String[] args) {
+        // 获取引擎配置
+        ProcessEngineConfiguration cfg = new StandaloneProcessEngineConfiguration()
+                .setJdbcUrl(DBUtil.getMemoryJdbcUrl())
+                .setJdbcUsername(DBUtil.getUsername())
+                .setJdbcDriver("org.h2.Driver")
+                .setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE);
+        // 获取引擎
+        ProcessEngine processEngine = cfg.buildProcessEngine();
+        // 部署流程定义
+        RepositoryService repositoryService = processEngine.getRepositoryService();
+        Deployment deployment = repositoryService.createDeployment()
+                .addClasspathResource("constructs/parallelGatewayTest.bpmn20.xml")
+                .deploy();
+        // 启动流程实例
+        RuntimeService runtimeService = processEngine.getRuntimeService();
+        ProcessInstance pi = runtimeService.startProcessInstanceByKey("parallelGatewayTest");
+        TaskService taskService = processEngine.getTaskService();
+        TaskQuery query = taskService.createTaskQuery()
+                .processInstanceId(pi.getId())
+                .orderByTaskName()
+                .asc();
+        // 查询此时的任务是不是两个
+        List<Task> tasks = query.list();
+        assertThat(tasks.size()).isEqualTo(2);
+        // 判断第一个任务是不是"Receive Payment"
+        Task task1 = tasks.get(0);
+        assertThat(task1.getName()).isEqualTo("Receive Payment");
+        // 判断第二个任务是不是“Ship Order”
+        Task task2 = tasks.get(1);
+        assertThat(task2.getName()).isEqualTo("Ship Order");
+        // 完成上面的两个用户任务
+        taskService.complete(task1.getId());
+        taskService.complete(task2.getId());
+        List<Task> list = taskService.createTaskQuery().processInstanceId(pi.getProcessInstanceId()).list();
+        // 判断此时是否只有一个用户任务
+        assertThat(list.size()).isEqualTo(1);
+        // 判断当前用户任务是不是"Archive Order"
+        assertThat(list.get(0).getName()).isEqualTo("Archive Order");
+    }
+
+}
+```
+
+* 流程定义xml代码
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:flowable="http://flowable.org/bpmn"
+             typeLanguage="http://www.w3.org/2001/XMLSchema"
+             expressionLanguage="http://www.w3.org/1999/XPath"
+             targetNamespace="http://www.flowable.org/processdef">
+
+    <process id="parallelGatewayTest" name="test parallel gateway" isExecutable="true">
+
+        <startEvent id="theStart" />
+        <sequenceFlow id="flow1" sourceRef="theStart" targetRef="fork" />
+
+        <parallelGateway id="fork" />
+        <sequenceFlow sourceRef="fork" targetRef="receivePayment" />
+        <sequenceFlow sourceRef="fork" targetRef="shipOrder" />
+
+        <userTask id="receivePayment" name="Receive Payment" />
+        <sequenceFlow sourceRef="receivePayment" targetRef="join" />
+
+        <userTask id="shipOrder" name="Ship Order" />
+        <sequenceFlow sourceRef="shipOrder" targetRef="join" />
+
+        <parallelGateway id="join" />
+        <sequenceFlow sourceRef="join" targetRef="archiveOrder" />
+
+        <userTask id="archiveOrder" name="Archive Order" />
+        <sequenceFlow sourceRef="archiveOrder" targetRef="theEnd" />
+
+        <endEvent id="theEnd" />
+
+    </process>
+
+</definitions>
+```
+
+根据并行网关的功能，上面的Java代码中 `assertThat(tasks.size()).isEqualTo(2);` 这个断言将不会抛出异常，因为第一个并行网关会fork出两个执行。并且，后面的断言也不会抛出异常。
+
+并行网关不需要平衡入口和出口的顺序流数量。
+
+###### 包容网关
+
+对应 `inclusiveGateway` 标签
+
+包容网关也会计算定义在顺序流上的条件，但是不同的是它会选择所有条件计算结果为true的顺序流。
+
+包容网关也有两种行为，采取哪种行为也是由顺序流决定的：
+
+* `fork` 对所有出口顺序流进行计算，会为所有条件计算结果为true的顺序流创建并行执行
+* `join` 所有并行执行的顺序流都在包容网关处等待直到每一条具有流程标志（process token）的入口顺序流，都有一个执行到达。这是与并行网关的重要区别。换句话说， **包容网关只会等待可以被执行的入口顺序流** 。在合并后，流程穿过包容网关继续执行。
+
+对于包容网关，上面的行为可以同时存在。
+
+包容网关对于流程图中的图标为：
+
+![bpmn.inclusive.gateway.png](../../img/BPMN/bpmn.inclusive.gateway.png)
+
+包容网关对应的xml表述为：
+
+```xml
+<inclusiveGateway id="myInclusiveGateway" />
+```
+
+例子：
+
+以上面的流程图为例
+
+* 流程定义xml代码
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             xmlns:flowable="http://flowable.org/bpmn"
+             typeLanguage="http://www.w3.org/2001/XMLSchema"
+             expressionLanguage="http://www.w3.org/1999/XPath"
+             targetNamespace="http://www.flowable.org/processdef">
+
+    <process id="inclusiveGateway" name="test inclusive gateway" isExecutable="true">
+
+        <startEvent id="theStart" />
+        <sequenceFlow id="flow1" sourceRef="theStart" targetRef="fork" />
+
+        <inclusiveGateway id="fork" />
+        <sequenceFlow sourceRef="fork" targetRef="receivePayment" >
+            <conditionExpression xsi:type="tFormalExpression">${paymentReceived == false}</conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow sourceRef="fork" targetRef="shipOrder" >
+            <conditionExpression xsi:type="tFormalExpression">${shipOrder == true}</conditionExpression>
+        </sequenceFlow>
+
+        <userTask id="receivePayment" name="Receive Payment" />
+        <sequenceFlow sourceRef="receivePayment" targetRef="join" />
+
+        <userTask id="shipOrder" name="Ship Order" />
+        <sequenceFlow sourceRef="shipOrder" targetRef="join" />
+
+        <inclusiveGateway id="join" />
+        <sequenceFlow sourceRef="join" targetRef="archiveOrder" />
+
+        <userTask id="archiveOrder" name="Archive Order" />
+        <sequenceFlow sourceRef="archiveOrder" targetRef="theEnd" />
+
+        <endEvent id="theEnd" />
+
+    </process>
+
+</definitions>
+```
+
+* Java代码
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs;
+
+import org.fade.demo.flowabledemo.bpmn.util.DBUtil;
+import org.flowable.engine.*;
+import org.flowable.engine.impl.cfg.StandaloneProcessEngineConfiguration;
+import org.flowable.engine.repository.Deployment;
+import org.flowable.engine.runtime.ProcessInstance;
+import org.flowable.task.api.Task;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * @author fade
+ * @date 2021/10/15
+ */
+public class InclusiveGateway {
+
+    private static final Logger logger = LoggerFactory.getLogger(InclusiveGateway.class);
+
+    public static void main(String[] args) {
+        // 获取引擎配置
+        ProcessEngineConfiguration cfg = new StandaloneProcessEngineConfiguration()
+                .setJdbcUrl(DBUtil.getMemoryJdbcUrl())
+                .setJdbcUsername(DBUtil.getUsername())
+                .setJdbcDriver("org.h2.Driver")
+                .setDatabaseSchemaUpdate(ProcessEngineConfiguration.DB_SCHEMA_UPDATE_TRUE);
+        // 获取引擎
+        ProcessEngine processEngine = cfg.buildProcessEngine();
+        // 部署流程定义
+        RepositoryService repositoryService = processEngine.getRepositoryService();
+        Deployment deployment = repositoryService.createDeployment()
+                .addClasspathResource("constructs/inclusiveGateway.bpmn20.xml")
+                .deploy();
+        // 设置流程变量并启动流程实例
+        RuntimeService runtimeService = processEngine.getRuntimeService();
+        HashMap<String, Object> processVariables = new HashMap<>(16);
+        processVariables.put("paymentReceived", false);
+//        processVariables.put("paymentReceived", true);
+//        processVariables.put("shipOrder", false);
+        processVariables.put("shipOrder", true);
+        ProcessInstance pi = runtimeService.startProcessInstanceByKey("inclusiveGateway", processVariables);
+        // 查询用户任务数量
+        TaskService taskService = processEngine.getTaskService();
+        List<Task> tasks = taskService.createTaskQuery()
+                .processInstanceId(pi.getProcessInstanceId())
+                .orderByTaskName()
+                .asc()
+                .list();
+        logger.info("The number of task before join gateway is " + tasks.size());
+        tasks.forEach(task -> {
+            logger.info("Task's name is " + task.getName());
+            taskService.complete(task.getId());
+        });
+        tasks = taskService.createTaskQuery()
+                .processInstanceId(pi.getProcessInstanceId())
+                .orderByTaskName()
+                .asc()
+                .list();
+        assertThat(tasks.size()).isEqualTo(1);
+    }
+
+}
+```
+
+这里例子中在启动流程实例时传入流程变量。根据传入变量的值的不同，可以验证包容网关的功能。比如根据 `logger.info("The number of task before join gateway is " + tasks.size());` 的输出判断包容网关是否会为每一个条件计算结果为true的顺序流创建并行执行。
+
+包容网关也不需要平衡入口顺序流的数量和出口顺序流的数量。
+
+###### 基于事件的网关
+
+对应 `eventBasedGateway` 标签
+
+基于事件的网关提供了根据事件做选择的方式，会选择捕获了事件的顺序流。网关的每一条出口顺序流都连接着一个中间捕获事件。当流程执行到达基于事件的网关时，与等待状态类似，网关会暂停执行，并且为每一条出口顺序流创建一个事件订阅。
+
+基于事件的网关的出口顺序流与一般的顺序流不同。这些顺序流从不实际执行。相反，它们用于告知流程引擎：当执行到达一个基于事件的网关时，需要订阅什么事件。它有以下限制：
+
+* 必须有两条或者更多的出口顺序流
+* 出口顺序流只能连接至中间捕获事件类型的元素，不支持在基于事件的网关后连接任务
+* 连接至基于事件的网关的中间捕获事件只能有一个入口顺序流
+
+基于事件的网关对应流程图中的图标为：
+
+![bpmn.event.based.gateway.notation.png](../../img/BPMN/bpmn.event.based.gateway.notation.png)
+
+基于事件的网关对应的xml表述如下所示：
+
+```xml
+<eventBasedGateway id="gw1" />
+```
+
+例子：
+
+* 流程图
+
+![bpmn.event.based.gateway.example.png](../../img/BPMN/bpmn.event.based.gateway.example.png)
+
+* 流程定义xml代码
+
+```xml
+<definitions id="definitions"
+             xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="Examples">
+
+    <signal id="alertSignal" name="alert" />
+
+    <process id="catchSignal">
+
+        <startEvent id="start" />
+
+        <sequenceFlow sourceRef="start" targetRef="gw1" />
+
+        <eventBasedGateway id="gw1" />
+
+        <sequenceFlow sourceRef="gw1" targetRef="signalEvent" />
+        <sequenceFlow sourceRef="gw1" targetRef="timerEvent" />
+
+        <intermediateCatchEvent id="signalEvent" name="Alert">
+            <signalEventDefinition signalRef="alertSignal" />
+        </intermediateCatchEvent>
+
+        <intermediateCatchEvent id="timerEvent" name="Alert">
+            <timerEventDefinition>
+                <timeDuration>PT2M</timeDuration>
+            </timerEventDefinition>
+        </intermediateCatchEvent>
+
+        <sequenceFlow sourceRef="timerEvent" targetRef="exGw1" />
+        <sequenceFlow sourceRef="signalEvent" targetRef="task" />
+
+        <userTask id="task" name="Handle alert"/>
+
+        <exclusiveGateway id="exGw1" />
+
+        <sequenceFlow sourceRef="task" targetRef="exGw1" />
+        <sequenceFlow sourceRef="exGw1" targetRef="end" />
+
+        <endEvent id="end" />
+    </process>
+</definitions>
+```
+
+* Java代码
+
+```java
+
+```
