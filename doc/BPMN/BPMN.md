@@ -1322,7 +1322,7 @@ public class Main {
 </timerEventDefinition>
 ```
 
-* `timeDuration` 定义了定时器需要等待多长时间再触发，也使用了[ISO 8601格式](https://en.wikipedia.org/wiki/ISO_8601#Durations)
+* `timeDuration` 定义了定时器需要等待多长时间再触发(基于当前时间)，也使用了[ISO 8601格式](https://en.wikipedia.org/wiki/ISO_8601#Durations)
 
 ```xml
 <timerEventDefinition>
@@ -1953,7 +1953,7 @@ public class InclusiveGateway {
 
         <intermediateCatchEvent id="timerEvent" name="Alert">
             <timerEventDefinition>
-                <timeDuration>PT2M</timeDuration>
+                <timeDuration>PT30S</timeDuration>
             </timerEventDefinition>
         </intermediateCatchEvent>
 
@@ -2046,4 +2046,89 @@ public class EventBasedGateway {
 
 }
 ```
+
+上面的例子中，流程执行到基于事件的网关时，执行会被暂停，并会为上边的出口顺序流创建一个三十秒后触发的定时器订阅，会为下边的出口顺序流创建一个对名字为 `alert` 的信号的订阅。这样如果在三十秒内出现了名字为 `alert` 的信号，流程将沿着下边的出口顺序流执行；如果三十秒内没有出现名字为 `alert` 的信号，则会沿上边的出口顺序流执行，并取消对名字为 `alert` 的信号的订阅。
+
+### 任务
+
+###### 用户任务
+
+用户任务用来对需要人类处理的工作进行建模，对应 `userTask` 标签。当流程执行到用户任务时，流程进入等待状态，用户任务会出现在任务所被分配的用户或组的任务列表上。
+
+用户任务对应流程图中的图标为：
+
+![bpmn.user.task.png](../../img/BPMN/bpmn.user.task.png)
+
+用户任务对应的xml表述如下所示：
+
+```xml
+<userTask id="theTask" name="Important task" />
+```
+
+对于 `userTask` 标签来说， `id` 属性是必填的， `name` 属性是可选的。
+
+用户任务可以用 `documentation` 子标签定义描述（事实上所有BPMN 2.0 标签都可以通过添加 `documentation` 子标签定义一个描述）：
+
+```xml
+<userTask id="theTask" name="Schedule meeting" >
+  <documentation>
+      Schedule an engineering meeting for next week with the new hire.
+  </documentation>
+</userTask>  
+```
+
+此时用户任务的描述可以通过下面的Java API 获取：
+
+```java
+task.getDescription()
+```
+
+每个任务都可以用 `flowable:dueDate` 来指明任务的到期时间，并且可以通过Java API 来查询在指定日期（前、后）过期的任务。但是注意 `flowable:dueDate` 有下面的格式要求：
+
+* `java.util.Date`
+*  ISO8601 格式的 `java.util.String` (可以是日期或time-duration)
+*  null // TODO: 验证null是不填还是填一个null
+
+```xml
+<userTask id="theTask" name="Important task" flowable:dueDate="${dateVariable}"/>
+```
+
+过期时间也可以通过 `TaskService` 或 在 `TaskListener` 中使用传递进来的 `DelegateTask` 修改。
+
+用户任务的分配方式有两种：
+
+* 直接分配给一个用户
+
+这种方式可以通过在 `userTask` 标签下定义 `humanPerformer` 子标签实现：
+
+```xml
+<userTask id='theTask' name='important task' >
+  <humanPerformer>
+    <resourceAssignmentExpression>
+      <formalExpression>kermit</formalExpression>
+    </resourceAssignmentExpression>
+  </humanPerformer>
+</userTask>
+```
+
+`humanPerformer` 只能指定一个用户，这个用户一般被叫做任务办理人（assignee）。
+
+或者你也可以通过flowable提供的 `flowable:assignee` 属性实现:
+
+```xml
+<userTask id="theTask" name="my task" flowable:assignee="kermit" />
+```
+
+直接分配给某个用户的用户任务可以通过类似下面的Java API 进行查询：
+
+```java
+List<Task> tasks = taskService.createTaskQuery().taskAssignee("kermit").list();
+```
+
+用户任务直接分配给某个用户后，会只能在这个用户的任务列表里才能找到。
+
+* 作为候选任务分配给用户
+
+// TODO: 验证能否同时直接分配和作为候选任务分配
+
 
