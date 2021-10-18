@@ -2131,4 +2131,113 @@ List<Task> tasks = taskService.createTaskQuery().taskAssignee("kermit").list();
 
 // TODO: 验证能否同时直接分配和作为候选任务分配
 
+这种方式可以通过在 `userTask` 标签下定义 `potentialOwner` 子标签实现：
 
+```xml
+<userTask id='theTask' name='important task' >
+  <potentialOwner>
+    <resourceAssignmentExpression>
+      <formalExpression>user(kermit), group(management)</formalExpression>
+    </resourceAssignmentExpression>
+  </potentialOwner>
+</userTask>
+```
+
+`potentialOwner` 可以同时指定多个用户或组，所以为了区别到底哪个是用户哪个是组，你很有必要指明哪个是用户哪个是组，例如上面xml代码中的 `user(kermit), group(management)` 。如果你未指定谁是用户谁是组，则默认会被认为是组，即：
+
+```xml
+<userTask id='theTask' name='important task' >
+  <potentialOwner>
+    <resourceAssignmentExpression>
+      <formalExpression>management</formalExpression>
+    </resourceAssignmentExpression>
+  </potentialOwner>
+</userTask>
+```
+
+等价于
+
+```xml
+<userTask id='theTask' name='important task' >
+  <potentialOwner>
+    <resourceAssignmentExpression>
+      <formalExpression>group(management)</formalExpression>
+    </resourceAssignmentExpression>
+  </potentialOwner>
+</userTask>
+```
+
+或者你也可以通过flowable提供的 `flowable:candidateUsers` 和 `flowable:candidateGroups` 属性实现：
+
+```xml
+<userTask id="theTask" name="my task" flowable:candidateUsers="kermit, gonzo" />
+```
+
+```xml
+<userTask id="theTask" name="my task" flowable:candidateGroups="management, accountancy" />
+```
+
+上面的代码上者等同于：
+
+```xml
+<userTask id='theTask' name='my task' >
+  <potentialOwner>
+    <resourceAssignmentExpression>
+      <formalExpression>user(kermit, gonzo)</formalExpression>
+    </resourceAssignmentExpression>
+  </potentialOwner>
+</userTask>
+```
+
+下者等同于：
+
+```xml
+<userTask id='theTask' name='important task' >
+  <potentialOwner>
+    <resourceAssignmentExpression>
+      <formalExpression>group(management, accountancy)</formalExpression>
+    </resourceAssignmentExpression>
+  </potentialOwner>
+</userTask>
+```
+
+`flowable:candidateUsers` 和 `flowable:candidateGroups` 属性可以同时定义在用户任务上。
+
+用户的候选任务可以通过下面的Java API 进行查询：
+
+```java
+List<Task> tasks = taskService.createTaskQuery().taskCandidateUser("kermit");
+```
+
+组的候选任务可以通过下面的Java API 进行查询：
+
+```java
+List<Task> tasks = taskService.createTaskQuery().taskCandidateGroup("managers").list();
+```
+
+flowable 的用户和组可以通过 `IdentityService` 进行管理，但它实际上并不会检查给定的用户或组是否实际存在，这便于我们实现自定义的身份管理解决方案。
+
+flowable 为用户任务提供的拓展属性在 `org.flowable.identitylink.api.IdentityLinkType` 中可见：
+
+```java
+public class IdentityLinkType {
+
+    public static final String ASSIGNEE = "assignee";
+
+    public static final String CANDIDATE = "candidate";
+
+    public static final String OWNER = "owner";
+
+    public static final String STARTER = "starter";
+
+    public static final String PARTICIPANT = "participant";
+
+    public static final String REACTIVATOR = "reactivator";
+}
+```
+
+为了在生产中使用，我们一般需要继承 `` 自定义额外的关联类型：
+
+```xml
+
+```
