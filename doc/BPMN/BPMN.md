@@ -2095,7 +2095,7 @@ task.getDescription()
 
 过期时间也可以通过 `TaskService` 或 在 `TaskListener` 中使用传递进来的 `DelegateTask` 修改。
 
-用户任务的分配方式有两种：
+用户任务的分配方式一般有两种：
 
 * 直接分配给一个用户
 
@@ -2236,8 +2236,123 @@ public class IdentityLinkType {
 }
 ```
 
-为了在生产中使用，我们一般需要继承 `` 自定义额外的关联类型：
+为了在生产中使用，我们一般需要继承 `org.flowable.identitylink.api.IdentityLinkType` 自定义额外的关联类型：
+
+```java
+public class IdentityLinkType extends org.flowable.engine.task.IdentityLinkType {
+
+    public static final String ADMINISTRATOR = "administrator";
+
+    public static final String EXCLUDED_OWNER = "excludedOwner";
+}
+```
+
+在xml中我们可以这样使用自定义的关联类型：
 
 ```xml
-
+<userTask id="theTask" name="make profit">
+  <extensionElements>
+    <flowable:customResource flowable:name="businessAdministrator">
+      <resourceAssignmentExpression>
+        <formalExpression>user(kermit), group(management)</formalExpression>
+      </resourceAssignmentExpression>
+    </flowable:customResource>
+  </extensionElements>
+</userTask>
 ```
+
+自定义关联表达式添加至 `TaskDefinition` 类???
+
+```java
+protected Map<String, Set<Expression>> customUserIdentityLinkExpressions =
+    new HashMap<String, Set<Expression>>();
+protected Map<String, Set<Expression>> customGroupIdentityLinkExpressions =
+    new HashMap<String, Set<Expression>>();
+
+public Map<String, Set<Expression>> getCustomUserIdentityLinkExpressions() {
+    return customUserIdentityLinkExpressions;
+}
+
+public void addCustomUserIdentityLinkExpression(
+        String identityLinkType, Set<Expression> idList) {
+
+    customUserIdentityLinkExpressions.put(identityLinkType, idList);
+}
+
+public Map<String, Set<Expression>> getCustomGroupIdentityLinkExpressions() {
+    return customGroupIdentityLinkExpressions;
+}
+
+public void addCustomGroupIdentityLinkExpression(
+        String identityLinkType, Set<Expression> idList) {
+
+    customGroupIdentityLinkExpressions.put(identityLinkType, idList);
+}
+```
+
+这些方法将在运行时，由 `UserTaskActivityBehavior` 的 `handleAssignments` 方法调用。
+
+// TODO: 待理解
+
+此外，你还可以通过使用自定义的任务监听器在任务 `create` 事件上，以此实现自定义的任务指派逻辑：
+
+```xml
+<userTask id="task1" name="My task" >
+  <extensionElements>
+    <flowable:taskListener event="create" class="org.flowable.MyAssignmentHandler" />
+  </extensionElements>
+</userTask>
+```
+
+自定义的任务监听器可以设置传递进来的 `DelegateTask` 的办理人和候选人、组。
+
+```java
+public class MyAssignmentHandler implements TaskListener {
+
+  public void notify(DelegateTask delegateTask) {
+    // Execute custom identity lookups here
+
+    // and then for example call following methods:
+    delegateTask.setAssignee("kermit");
+    delegateTask.addCandidateUser("fozzie");
+    delegateTask.addCandidateGroup("management");
+    ...
+  }
+
+}
+```
+
+当使用Spring时，可以按前面所介绍的使用flowable提供的指派属性和自定义的指派属性，或通过任务监听器实现自定义的任务指派逻辑，如：
+
+```xml
+<userTask id="task" name="My Task" flowable:assignee="${ldapService.findManagerForEmployee(emp)}"/>
+```
+
+```xml
+<userTask id="task" name="My Task" flowable:candidateUsers="${ldapService.findAllSales()}"/>
+```
+
+上面的 `ldapService` 是一个Spring Bean：
+
+```java
+public class FakeLdapService {
+
+  public String findManagerForEmployee(String employee) {
+    return "Kermit The Frog";
+  }
+
+  public List<String> findAllSales() {
+    return Arrays.asList("kermit", "gonzo", "fozzie");
+  }
+
+}
+```
+
+注意对于执行人（assignee），方法的返回值必须是 `java.lang.String` ;对于候选人或组，方法的返回值必须是 `java.lang.String` 或 `java.util.Collection<String>` 
+
+// TODO: 待验证和理解
+
+// TODO: 补充示例
+
+###### 脚本任务
+
