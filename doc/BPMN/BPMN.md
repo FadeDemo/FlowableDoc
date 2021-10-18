@@ -592,7 +592,7 @@ runtimeService.startProcessInstanceByMessage(...)
 
 // TODO: 补充使用示例
 
-* ###### 取消终止事件（对应含有 `cancelEventDefinition` 事件定义的 `endEvent` 标签）
+* ###### 取消结束事件（对应含有 `cancelEventDefinition` 事件定义的 `endEvent` 标签）
 
 取消结束事件只能与BPMN事务子流程一起使用。当到达取消结束事件时，会抛出取消事件，且必须由取消边界事件捕获。取消边界事件将取消事务，并触发补偿。
 
