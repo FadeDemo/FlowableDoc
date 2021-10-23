@@ -2083,17 +2083,73 @@ public class EventBasedGateway {
 task.getDescription()
 ```
 
-每个任务都可以用 `flowable:dueDate` 来指明任务的到期时间，并且可以通过Java API 来查询在指定日期（前、后）过期的任务。但是注意 `flowable:dueDate` 有下面的格式要求：
+每个任务都可以用 `flowable:dueDate` 来指明任务的到期时间，并且可以通过Java API 来查询在指定时间（前、后）过期的任务。
 
-* `java.util.Date`
-*  ISO8601 格式的 `java.util.String` (可以是日期或time-duration)
-*  null // TODO: 验证null是不填还是填一个null
+![Snipaste_2021-10-23_16-43-32.png](../../img/BPMN/Snipaste_2021-10-23_16-43-32.png)
+
+但是注意 `flowable:dueDate` 有下面的格式要求：
+
+* `java.util.Date` (以流程变量的方式设置)
+*  ISO8601 格式的 `java.util.String` (可以是日期、日期时间或time-duration)
+*  null (即不设置 `flowable:dueDate` 属性)
 
 ```xml
-<userTask id="theTask" name="Important task" flowable:dueDate="${dateVariable}"/>
+        <!--null或通过TaskService设置的到期时间-->
+<!--        <userTask id="theTask" name="Important task"/>-->
+        <!-- ISO8601 格式日期 -->
+<!--        <userTask id="theTask" name="Important task" flowable:dueDate="2021-10-23"/>-->
+        <!-- ISO8601 格式日期时间 -->
+<!--        <userTask id="theTask" name="Important task" flowable:dueDate="2021-10-23T23:00:00"/>-->
+        <!-- ISO8601 格式时间段 -->
+<!--        <userTask id="theTask" name="Important task" flowable:dueDate="PT20M"/>-->
+        <!-- java.util.Date 格式时间，需在流程变量里设置-->
+        <userTask id="theTask" name="Important task" flowable:dueDate="#{dueDate}"/>
 ```
 
-过期时间也可以通过 `TaskService` 或 在 `TaskListener` 中使用传递进来的 `DelegateTask` 修改。
+过期时间也可以通过 `TaskService` 或在 `TaskListener` 中使用传递进来的 `DelegateTask` 进行设置、修改。
+
+* `TaskService`
+
+```java
+taskService.setDueDate(task.getId(), dueDate);
+```
+
+* `TaskListener`
+
+```xml
+<!--通过TaskListener设置或修改到期时间-->
+<!--        <userTask id="theTask" name="Important task">-->
+        <userTask id="theTask" name="Important task" flowable:dueDate="PT10M">
+            <extensionElements>
+                <flowable:taskListener event="create" class="org.fade.demo.flowabledemo.bpmn.constructs.task.DueDateTaskListener" />
+            </extensionElements>
+        </userTask>
+```
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task;
+
+import org.flowable.engine.delegate.TaskListener;
+import org.flowable.task.service.delegate.DelegateTask;
+
+import java.util.Date;
+
+/**
+ * @author fade
+ * @date 2021/10/23
+ */
+public class DueDateTaskListener implements TaskListener {
+
+    @Override
+    public void notify(DelegateTask delegateTask) {
+        Date dueDate = new Date();
+        dueDate.setTime(dueDate.getTime() + 20*60*1000L);
+        // 如果已经通过flowable:dueDate设置到期时间，则会覆盖
+        delegateTask.setDueDate(dueDate);
+    }
+
+}
+```
 
 用户任务的分配方式一般有两种：
 
@@ -2113,10 +2169,13 @@ task.getDescription()
 
 `humanPerformer` 只能指定一个用户，这个用户一般被叫做任务办理人（assignee）。
 
-或者你也可以通过flowable提供的 `flowable:assignee` 属性实现:
+或者你也可以通过flowable提供的 `flowable:assignee` 属性实现（可使用表达式从流程变量中获取）:
 
 ```xml
-<userTask id="theTask" name="my task" flowable:assignee="kermit" />
+<!--通过flowable:assignee直接分配给一个用户-->
+<!--        <userTask id="theTask" name="Important task" flowable:assignee="kermit" />-->
+        <!--通过流程变量指定flowable:assignee-->
+<!--        <userTask id="theTask" name="Important task" flowable:assignee="#{assignee}" />-->
 ```
 
 直接分配给某个用户的用户任务可以通过类似下面的Java API 进行查询：
@@ -2129,7 +2188,7 @@ List<Task> tasks = taskService.createTaskQuery().taskAssignee("kermit").list();
 
 * 作为候选任务分配给用户
 
-// TODO: 验证能否同时直接分配和作为候选任务分配
+如果同时直接分配和作为候选任务分配，起作用的是直接分配
 
 这种方式可以通过在 `userTask` 标签下定义 `potentialOwner` 子标签实现：
 
