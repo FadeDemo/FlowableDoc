@@ -2279,7 +2279,7 @@ List<Task> tasks = taskService.createTaskQuery().taskCandidateGroup("managers").
 ```xml
 <userTask id="theTask" name="Important task">
   <extensionElements>
-    <flowable:taskListener event="create" class="org.fade.demo.flowabledemo.bpmn.constructs.task.TaskAssignListener" />
+    <flowable:taskListener event="create" class="org.fade.demo.flowabledemo.bpmn.constructs.task.usertask.TaskAssignListener" />
   </extensionElements>
 </userTask>
 ```
@@ -2287,7 +2287,7 @@ List<Task> tasks = taskService.createTaskQuery().taskCandidateGroup("managers").
 自定义的任务监听器可以设置传递进来的 `DelegateTask` 的办理人和候选人、组。
 
 ```java
-package org.fade.demo.flowabledemo.bpmn.constructs.task;
+package org.fade.demo.flowabledemo.bpmn.constructs.task.usertask;
 
 import org.flowable.engine.delegate.TaskListener;
 import org.flowable.task.service.delegate.DelegateTask;
@@ -2312,6 +2312,8 @@ public class TaskAssignListener implements TaskListener {
 
 flowable 的用户和组可以通过 `IdentityService` 进行管理，但它实际上并不会检查给定的用户或组是否实际存在，这便于我们实现自定义的身份管理解决方案。
 
+// TODO: 更新官方文档 IdentityLinkType 包名错误
+
 flowable 为用户任务提供的拓展属性在 `org.flowable.identitylink.api.IdentityLinkType` 中可见：
 
 ```java
@@ -2331,21 +2333,38 @@ public class IdentityLinkType {
 }
 ```
 
-为了在生产中使用，我们一般需要继承 `org.flowable.identitylink.api.IdentityLinkType` 自定义额外的关联类型：
+// TODO: 更新官方文档 可以没有必要继承
+
+为了在生产中使用，我们可以继承 `org.flowable.identitylink.api.IdentityLinkType` 自定义额外的关联类型：
 
 ```java
-public class IdentityLinkType extends org.flowable.engine.task.IdentityLinkType {
+package org.fade.demo.flowabledemo.bpmn.constructs.task;
+
+import org.flowable.identitylink.api.IdentityLinkType;
+
+/**
+ * @author fade
+ * @date 2021/10/24
+ */
+public class MyIdentityLinkType extends IdentityLinkType {
 
     public static final String ADMINISTRATOR = "administrator";
 
     public static final String EXCLUDED_OWNER = "excludedOwner";
+
 }
 ```
 
-在xml中我们可以这样使用自定义的关联类型：
+并通过Java API来进行任务分配：
+
+```java
+taskService.addUserIdentityLink(task.getId(), "kermit", MyIdentityLinkType.ADMINISTRATOR);
+```
+
+或者在xml中我们可以直接这样使用自定义的关联类型：
 
 ```xml
-<userTask id="theTask" name="make profit">
+<userTask id="theTask" name="Important task">
   <extensionElements>
     <flowable:customResource flowable:name="businessAdministrator">
       <resourceAssignmentExpression>
@@ -2356,9 +2375,9 @@ public class IdentityLinkType extends org.flowable.engine.task.IdentityLinkType 
 </userTask>
 ```
 
-// TODO: 官方文档更新
+// TODO: 官方文档更新 TaskDefinition 是 activity中内容
 
-自定义关联表达式添加至用户任务中是通过 `UserTask` 中的下列代码实现的：
+xml方式自定义关联表达式添加至用户任务中是通过 `UserTask` 中的下列代码实现的：
 
 ```java
     protected Map<String, Set<String>> customUserIdentityLinks = new HashMap<>();
@@ -2403,8 +2422,6 @@ public class IdentityLinkType extends org.flowable.engine.task.IdentityLinkType 
 ```
 
 这些方法将在运行时，由 `UserTaskActivityBehavior` 的 `handleAssignments` 方法调用。
-
-// TODO: 待理解
 
 当使用Spring时，可以按前面所介绍的使用flowable提供的指派属性和自定义的指派属性，或通过任务监听器实现自定义的任务指派逻辑，如：
 
