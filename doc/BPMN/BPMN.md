@@ -2274,6 +2274,42 @@ List<Task> tasks = taskService.createTaskQuery().taskCandidateUser("kermit");
 List<Task> tasks = taskService.createTaskQuery().taskCandidateGroup("managers").list();
 ```
 
+此外，你还可以通过使用自定义的任务监听器在任务 `create` 事件上，以此实现自定义的任务指派逻辑：
+
+```xml
+<userTask id="theTask" name="Important task">
+  <extensionElements>
+    <flowable:taskListener event="create" class="org.fade.demo.flowabledemo.bpmn.constructs.task.TaskAssignListener" />
+  </extensionElements>
+</userTask>
+```
+
+自定义的任务监听器可以设置传递进来的 `DelegateTask` 的办理人和候选人、组。
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task;
+
+import org.flowable.engine.delegate.TaskListener;
+import org.flowable.task.service.delegate.DelegateTask;
+
+/**
+ * @author fade
+ * @date 2021/10/24
+ */
+public class TaskAssignListener implements TaskListener {
+
+    @Override
+    public void notify(DelegateTask delegateTask) {
+        // 直接分配给一个用户
+//        delegateTask.setAssignee("kermit");
+        // 作为候选任务分配
+        delegateTask.addCandidateUser("kermit");
+        delegateTask.addCandidateGroup("management");
+    }
+
+}
+```
+
 flowable 的用户和组可以通过 `IdentityService` 进行管理，但它实际上并不会检查给定的用户或组是否实际存在，这便于我们实现自定义的身份管理解决方案。
 
 flowable 为用户任务提供的拓展属性在 `org.flowable.identitylink.api.IdentityLinkType` 中可见：
@@ -2320,66 +2356,55 @@ public class IdentityLinkType extends org.flowable.engine.task.IdentityLinkType 
 </userTask>
 ```
 
-自定义关联表达式添加至 `TaskDefinition` 类???
+// TODO: 官方文档更新
+
+自定义关联表达式添加至用户任务中是通过 `UserTask` 中的下列代码实现的：
 
 ```java
-protected Map<String, Set<Expression>> customUserIdentityLinkExpressions =
-    new HashMap<String, Set<Expression>>();
-protected Map<String, Set<Expression>> customGroupIdentityLinkExpressions =
-    new HashMap<String, Set<Expression>>();
+    protected Map<String, Set<String>> customUserIdentityLinks = new HashMap<>();
+    protected Map<String, Set<String>> customGroupIdentityLinks = new HashMap<>();
+    public void addCustomUserIdentityLink(String userId, String type) {
+        Set<String> userIdentitySet = customUserIdentityLinks.get(type);
 
-public Map<String, Set<Expression>> getCustomUserIdentityLinkExpressions() {
-    return customUserIdentityLinkExpressions;
-}
+        if (userIdentitySet == null) {
+            userIdentitySet = new HashSet<>();
+            customUserIdentityLinks.put(type, userIdentitySet);
+        }
 
-public void addCustomUserIdentityLinkExpression(
-        String identityLinkType, Set<Expression> idList) {
+        userIdentitySet.add(userId);
+    }
 
-    customUserIdentityLinkExpressions.put(identityLinkType, idList);
-}
+    public void addCustomGroupIdentityLink(String groupId, String type) {
+        Set<String> groupIdentitySet = customGroupIdentityLinks.get(type);
 
-public Map<String, Set<Expression>> getCustomGroupIdentityLinkExpressions() {
-    return customGroupIdentityLinkExpressions;
-}
+        if (groupIdentitySet == null) {
+            groupIdentitySet = new HashSet<>();
+            customGroupIdentityLinks.put(type, groupIdentitySet);
+        }
 
-public void addCustomGroupIdentityLinkExpression(
-        String identityLinkType, Set<Expression> idList) {
+        groupIdentitySet.add(groupId);
+    }
 
-    customGroupIdentityLinkExpressions.put(identityLinkType, idList);
-}
+    public Map<String, Set<String>> getCustomUserIdentityLinks() {
+        return customUserIdentityLinks;
+    }
+
+    public void setCustomUserIdentityLinks(Map<String, Set<String>> customUserIdentityLinks) {
+        this.customUserIdentityLinks = customUserIdentityLinks;
+    }
+
+    public Map<String, Set<String>> getCustomGroupIdentityLinks() {
+        return customGroupIdentityLinks;
+    }
+
+    public void setCustomGroupIdentityLinks(Map<String, Set<String>> customGroupIdentityLinks) {
+        this.customGroupIdentityLinks = customGroupIdentityLinks;
+    }
 ```
 
 这些方法将在运行时，由 `UserTaskActivityBehavior` 的 `handleAssignments` 方法调用。
 
 // TODO: 待理解
-
-此外，你还可以通过使用自定义的任务监听器在任务 `create` 事件上，以此实现自定义的任务指派逻辑：
-
-```xml
-<userTask id="task1" name="My task" >
-  <extensionElements>
-    <flowable:taskListener event="create" class="org.flowable.MyAssignmentHandler" />
-  </extensionElements>
-</userTask>
-```
-
-自定义的任务监听器可以设置传递进来的 `DelegateTask` 的办理人和候选人、组。
-
-```java
-public class MyAssignmentHandler implements TaskListener {
-
-  public void notify(DelegateTask delegateTask) {
-    // Execute custom identity lookups here
-
-    // and then for example call following methods:
-    delegateTask.setAssignee("kermit");
-    delegateTask.addCandidateUser("fozzie");
-    delegateTask.addCandidateGroup("management");
-    ...
-  }
-
-}
-```
 
 当使用Spring时，可以按前面所介绍的使用flowable提供的指派属性和自定义的指派属性，或通过任务监听器实现自定义的任务指派逻辑，如：
 
