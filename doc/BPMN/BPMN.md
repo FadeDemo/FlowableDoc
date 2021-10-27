@@ -2469,3 +2469,33 @@ public class FakeLdapService {
 
 ###### 脚本任务
 
+脚本任务是自动执行的活动。当流程执行到达脚本任务时，会执行相应的脚本。
+
+它有以下属性：
+
+// TODO: 更新官方中文adoc
+
+* `name` 任务的名字
+* `type` 指明任务的类型，必须取值为 `script` 
+* `scriptFormat` 指明脚本所使用的语言，如 `javascript`
+* `autoStoreVariables` 可选，默认为 `false` ，指出是否会把脚本中定义的变量存储在执行上下文中
+* `resultVariableName` 可选，会用指定的名字定义的变量把脚本评估结果存储在执行上下文中
+
+脚本任务对应有 `script` 子标签的 `scriptTask` 标签：
+
+```xml
+<scriptTask id="theScriptTask" name="Execute script" scriptFormat="groovy">
+  <script>
+    sum = 0
+    for ( i in inputArray ) {
+      sum += i
+    }
+  </script>
+</scriptTask>
+```
+
+脚本任务对应流程图中的图标为：
+
+![bpmn.scripttask.png](../../img/BPMN/bpmn.scripttask.png)
+
+注意 `scriptFormat` 属性值，它必须与[JSR-223]
