@@ -2478,18 +2478,25 @@ public class FakeLdapService {
 * `name` 任务的名字
 * `type` 指明任务的类型，必须取值为 `script` 
 * `scriptFormat` 指明脚本所使用的语言，如 `javascript`
-* `autoStoreVariables` 可选，默认为 `false` ，指出是否会把脚本中定义的变量存储在执行上下文中
-* `resultVariableName` 可选，会用指定的名字定义的变量把脚本评估结果存储在执行上下文中
+* `flowable:autoStoreVariables` 可选，默认为 `false` ，指出是否会把脚本中定义的变量存储在执行上下文中
+* `flowable:resultVariableName` 或 `flowable:resultVariable` 可选，会用指定的名字定义的变量把脚本评估结果存储在执行上下文中
+
+注意上面的属性中 `flowable:resultVariable` 和 `flowable:resultVariableName` 都可以使用，只不过前者一般用于脚本任务，后者一般用于服务任务
+
+![Snipaste_2021-10-27_15-02-44.png](../../img/BPMN/Snipaste_2021-10-27_15-02-44.png)
+
+![Snipaste_2021-10-27_15-03-15.png](../../img/BPMN/Snipaste_2021-10-27_15-03-15.png)
+
+推荐按照上面的图片在服务任务使用 `flowable:resultVariableName` ，在脚本任务使用 `flowable:resultVariable`
+
+// TODO: 验证服务任务能使用 `flowable:resultVariable` 
 
 脚本任务对应有 `script` 子标签的 `scriptTask` 标签：
 
 ```xml
-<scriptTask id="theScriptTask" name="Execute script" scriptFormat="groovy">
+<scriptTask id="theTask" name="Important task" scriptFormat="kotlin">
   <script>
-    sum = 0
-    for ( i in inputArray ) {
-      sum += i
-    }
+    println("hello world")
   </script>
 </scriptTask>
 ```
@@ -2498,4 +2505,106 @@ public class FakeLdapService {
 
 ![bpmn.scripttask.png](../../img/BPMN/bpmn.scripttask.png)
 
-注意 `scriptFormat` 属性值，它必须与[JSR-223]
+// TODO: 确认 是否是JSR-223标准无关紧要，只要是支持在运行时动态编译和执行的JVM语言即可
+
+注意 `scriptFormat` 属性值，它必须与[JSR-223](https://jcp.org/en/jsr/detail?id=223)兼容。默认的JDK只支持JavaScript和JUEL，可以通过下面的代码获取JDK默认支持的脚本语言：
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task.scripttask;
+
+import javax.script.ScriptEngineFactory;
+import javax.script.ScriptEngineManager;
+import java.util.List;
+
+/**
+ * @author fade
+ * @date 2021/10/27
+ */
+public class DefaultPermitScriptLanguage {
+
+    public static void main(String[] args) {
+        ScriptEngineManager mgr = new ScriptEngineManager();
+        List<ScriptEngineFactory> factories = mgr.getEngineFactories();
+
+        for (ScriptEngineFactory factory : factories) {
+
+            System.out.println("ScriptEngineFactory Info");
+
+            String engName = factory.getEngineName();
+            String engVersion = factory.getEngineVersion();
+            String langName = factory.getLanguageName();
+            String langVersion = factory.getLanguageVersion();
+
+            System.out.printf("\tScript Engine: %s (%s)%n", engName, engVersion);
+
+            List<String> engNames = factory.getNames();
+            for(String name : engNames) {
+                System.out.printf("\tEngine Alias: %s%n", name);
+            }
+
+            System.out.printf("\tLanguage: %s (%s)%n", langName, langVersion);
+
+        }
+    }
+
+}
+```
+
+如果你要使用其它与JSR-223兼容的脚本语言，你需要添加它们相应的依赖。如：
+
+```xml
+<!--kotlin-->
+<dependency>
+  <groupId>org.jetbrains.kotlin</groupId>
+  <artifactId>kotlin-scripting-jsr223</artifactId>
+  <version>${kotlin-version}</version>
+  <scope>runtime</scope>
+</dependency>
+```
+
+所有的流程变量都可以在脚本中使用，如：
+
+```xml
+<script>
+    sum = 0
+    for ( i in inputArray ) {
+      sum += i
+    }
+</script>
+```
+
+上面的脚本中的inputArray就是一个流程变量。
+
+我们也可以在脚本中设置流程变量，只需简单的调用 `execution.setVariable("variableName", variableValue)` 。脚本默认是不自动设置流程变量的，但是你可以通过设置 `scriptTask` 标签的 `flowable:autoStoreVariables` 属性来开启自动设置。不过在某些JDK版本中，自动设置对一些脚本语言可能会不起作用，所以不推荐使用自动设置。
+
+```xml
+<scriptTask id="theTask" name="Important task" scriptFormat="JavaScript">-->
+  <script>
+    execution.setVariable("test", count)
+  </script>
+</scriptTask>
+```
+
+// TODO: 为什么关键字可以做变量名
+
+注意有些保留字是无法作为变量名的： `out` 、 `out:print` 、 `lang:import` 、 `context` 和 `elcontext` 。
+
+脚本执行的返回值可以通过 `scriptTask` 标签的 `flowable:resultVariable` 属性赋予已存在的变量或新建的变量，当未设置 `flowable:resultVariable` 属性时，脚本执行的返回值会被忽略。
+
+```xml
+<scriptTask id="theTask" name="Important task" scriptFormat="javascript" flowable:resultVariable="test">
+  <script>
+    var out = 1
+    out++
+    out
+  </script>
+</scriptTask>
+```
+
+上面的例子中就把脚本执行的结果out赋予了test流程变量
+
+在使用JavaScript作为脚本语言时可以使用[安全脚本](// TODO: 补充链接)。
+
+[完整示例](https://github.com/FadeDemo/FlowableDemo/tree/main/bpmn/src/main/java/org/fade/demo/flowabledemo/bpmn/constructs/task/scripttask)
+
+
