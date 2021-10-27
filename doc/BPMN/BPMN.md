@@ -2479,7 +2479,7 @@ public class FakeLdapService {
 * `type` 指明任务的类型，必须取值为 `script` 
 * `scriptFormat` 指明脚本所使用的语言，如 `javascript`
 * `flowable:autoStoreVariables` 可选，默认为 `false` ，指出是否会把脚本中定义的变量存储在执行上下文中
-* `flowable:resultVariableName` 或 `flowable:resultVariable` 可选，会用指定的名字定义的变量把脚本评估结果存储在执行上下文中
+* `flowable:resultVariableName` 或 `flowable:resultVariable` 可选，会用指定的名字定义的变量把脚本执行结果存储在执行上下文中
 
 注意上面的属性中 `flowable:resultVariable` 和 `flowable:resultVariableName` 都可以使用，只不过前者一般用于脚本任务，后者一般用于服务任务
 
@@ -2608,3 +2608,26 @@ public class DefaultPermitScriptLanguage {
 [完整示例](https://github.com/FadeDemo/FlowableDemo/tree/main/bpmn/src/main/java/org/fade/demo/flowabledemo/bpmn/constructs/task/scripttask)
 
 
+###### Java服务任务
+
+Java服务任务用于调用Java类。
+
+它对应于 `serviceTask` 标签，在流程图中表示为：
+
+![bpmn.java.service.task.png](../../img/BPMN/bpmn.java.service.task.png)
+
+它有以下几种方式调用Java逻辑：
+
+* 通过指定 `serviceTask` 标签的 `flowable:class` 属性的值，这个值必须是实现了 `JavaDelegate` 、 `FutureJavaDelegate` 或 `ActivityBehavior` 接口的类的全类名
+* 通过指定 `serviceTask` 标签的 `flowable:delegateExpression` 属性的值，这个值必须是实现了 `JavaDelegate` 、 `FutureJavaDelegate` 或 `ActivityBehavior` 接口的类的实例，可以是流程变量，也可以是Spring Bean
+* 通过指定 `serviceTask` 标签的 `flowable:expression` 属性的值，这个值即一个[方法表达式](Flowable-API.md#方法表达式)
+* 通过指定 `serviceTask` 标签的 `flowable:expression` 属性的值，这个值即一个[值表达式](Flowable-API.md#值表达式)，它会去调用相应的getter方法
+
+// TODO: 下面的待理解
+
+当通过定义在 `serviceTask` 标签里的方法表达式去调用Java逻辑可能会耗费更长的时间，因为它可能返回一个 `CompletableFuture<?>` ，这种情况下其它流也可以同时被执行。
+
+// TODO: 待验证
+通过指定 `serviceTask` 标签的 `flowable:class` 属性的值的方式只会为指定的类创建一个实例。这意味着该类不能有任何成员变量，并需要是线程安全的，因为它可能会在不同线程中同时执行。这也影响了的使用方法。
+
+`flowable:class` 这种方式在部署时不会实例化，只有当流程执行第一次到达该类使用的地方时，才会创建该类的实例，如果找不到这个类则会抛出一个异常。这是因为部署时的classpath与实际运行时的classpath可能不同，例如使用 `ant` 或者业务存档方式部署的流程。
