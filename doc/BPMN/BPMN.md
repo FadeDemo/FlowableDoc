@@ -2426,34 +2426,46 @@ xml方式自定义关联表达式添加至用户任务中是通过 `UserTask` �
 当使用Spring时，可以按前面所介绍的使用flowable提供的指派属性和自定义的指派属性，或通过任务监听器实现自定义的任务指派逻辑，如：
 
 ```xml
-<userTask id="task" name="My Task" flowable:assignee="${ldapService.findManagerForEmployee(emp)}"/>
+<userTask id="theTask" name="Important task" flowable:assignee="${ldapService.findManagerForEmployee(emp)}" />
 ```
 
 ```xml
-<userTask id="task" name="My Task" flowable:candidateUsers="${ldapService.findAllSales()}"/>
+<userTask id="theTask" name="Important task" flowable:candidateUsers="${ldapService.findAllSales()}" />
 ```
 
 上面的 `ldapService` 是一个Spring Bean：
 
 ```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task.usertask;
+
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * @author fade
+ * @date 2021/10/24
+ */
 public class FakeLdapService {
 
-  public String findManagerForEmployee(String employee) {
-    return "Kermit The Frog";
-  }
+    private static final List<String> RESOURCES = Arrays.asList("kermit", "gonzo", "fozzie");
 
-  public List<String> findAllSales() {
-    return Arrays.asList("kermit", "gonzo", "fozzie");
-  }
+    public String findManagerForEmployee(String employee) {
+        if (RESOURCES.contains(employee)) {
+            return RESOURCES.get(RESOURCES.indexOf(employee));
+        }
+        throw new RuntimeException("用户不存在");
+    }
+
+    public List<String> findAllSales() {
+        return RESOURCES;
+    }
 
 }
 ```
 
 注意对于执行人（assignee），方法的返回值必须是 `java.lang.String` ;对于候选人或组，方法的返回值必须是 `java.lang.String` 或 `java.util.Collection<String>` 
 
-// TODO: 待验证和理解
-
-// TODO: 补充示例
+[完整示例](https://github.com/FadeDemo/FlowableDemo/tree/main/bpmn/src/main/java/org/fade/demo/flowabledemo/bpmn/constructs/task/usertask)
 
 ###### 脚本任务
 
