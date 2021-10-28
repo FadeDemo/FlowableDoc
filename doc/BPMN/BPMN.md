@@ -2696,9 +2696,75 @@ public class LongRunningFutureJavaDelegate implements FutureJavaDelegate<String>
 
 `ActivityBehavior`
 
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask;
 
+import org.flowable.engine.delegate.DelegateExecution;
+import org.flowable.engine.delegate.DelegateHelper;
+import org.flowable.engine.impl.delegate.ActivityBehavior;
+
+/**
+ * @author fade
+ * @date 2021/10/28
+ */
+public class ThrowsExceptionBehavior implements ActivityBehavior {
+
+    @Override
+    public void execute(DelegateExecution execution) {
+        String var = (String) execution.getVariable("var");
+        String sequenceFlowToTake = null;
+        try {
+            executeLogic(var);
+            sequenceFlowToTake = "no-exception";
+        } catch (Exception e) {
+            sequenceFlowToTake = "exception";
+        }
+        DelegateHelper.leaveDelegate(execution, sequenceFlowToTake);
+    }
+
+    private void executeLogic(String value) {
+        if ("throw-exception".equals(value)) {
+            throw new RuntimeException();
+        }
+    }
+
+}
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions id="definitions"
+             xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="Examples">
+
+    <process id="exceptionHandling">
+
+        <startEvent id="theStart" />
+        <sequenceFlow id="flow1" sourceRef="theStart" targetRef="javaService" />
+
+        <serviceTask id="javaService"
+                     name="Java service invocation"
+                     flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.ThrowsExceptionBehavior">
+        </serviceTask>
+
+        <sequenceFlow id="no-exception" sourceRef="javaService" targetRef="theEnd" />
+        <sequenceFlow id="exception" sourceRef="javaService" targetRef="fixException" />
+
+        <userTask id="fixException" name="Fix Exception" />
+        <sequenceFlow id="flow4" sourceRef="fixException" targetRef="theEnd" />
+
+        <endEvent id="theEnd" />
+
+    </process>
+
+</definitions>
+```
 
 * 通过指定 `serviceTask` 标签的 `flowable:delegateExpression` 属性的值，这个值必须是实现了 `JavaDelegate` 、 `FutureJavaDelegate` 或 `ActivityBehavior` 接口的类的实例，可以是流程变量，也可以是Spring Bean
+
+
+
 * 通过指定 `serviceTask` 标签的 `flowable:expression` 属性的值，这个值即一个[方法表达式](Flowable-API.md#方法表达式)
 * 通过指定 `serviceTask` 标签的 `flowable:expression` 属性的值，这个值即一个[值表达式](Flowable-API.md#值表达式)，它会去调用相应的getter方法
 
