@@ -2619,15 +2619,149 @@ Java服务任务用于调用Java类。
 它有以下几种方式调用Java逻辑：
 
 * 通过指定 `serviceTask` 标签的 `flowable:class` 属性的值，这个值必须是实现了 `JavaDelegate` 、 `FutureJavaDelegate` 或 `ActivityBehavior` 接口的类的全类名
+
+`JavaDelegate`
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask;
+
+import org.flowable.engine.delegate.DelegateExecution;
+import org.flowable.engine.delegate.JavaDelegate;
+
+/**
+ * @author fade
+ * @date 2021/10/28
+ */
+public class ToUppercase implements JavaDelegate {
+
+    @Override
+    public void execute(DelegateExecution execution) {
+        String var = (String) execution.getVariable("input");
+        var = var.toUpperCase();
+        execution.setVariable("input", var);
+    }
+
+}
+```
+
+```xml
+<!--测试通过flowable:class调用Java逻辑-->
+<serviceTask id="theTask" name="Important task" flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.ToUppercase" />
+```
+
+`FutureJavaDelegate`
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask;
+
+import org.flowable.common.engine.api.async.AsyncTaskInvoker;
+import org.flowable.engine.delegate.DelegateExecution;
+import org.flowable.engine.delegate.FutureJavaDelegate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * @author fade
+ * @date 2021/10/28
+ */
+public class LongRunningFutureJavaDelegate implements FutureJavaDelegate<String> {
+
+    private static final Logger logger = LoggerFactory.getLogger(LongRunningFutureJavaDelegate.class);
+
+    @Override
+    public CompletableFuture<String> execute(DelegateExecution execution, AsyncTaskInvoker taskInvoker) {
+        String input = (String) execution.getVariable("input");
+        logger.info("input:" + input);
+        return taskInvoker.submit(() -> {
+            Thread.sleep(60000);
+            return "done";
+        });
+    }
+
+    @Override
+    public void afterExecution(DelegateExecution execution, String executionData) {
+        execution.setVariable("input", executionData);
+        logger.info("LongRunningFutureJavaDelegate执行完成");
+    }
+
+}
+```
+
+```xml
+<!--测试FutureJavaDelegate-->
+<serviceTask id="theTask" name="Important task" flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.LongRunningFutureJavaDelegate" />
+```
+
+`ActivityBehavior`
+
+
+
 * 通过指定 `serviceTask` 标签的 `flowable:delegateExpression` 属性的值，这个值必须是实现了 `JavaDelegate` 、 `FutureJavaDelegate` 或 `ActivityBehavior` 接口的类的实例，可以是流程变量，也可以是Spring Bean
 * 通过指定 `serviceTask` 标签的 `flowable:expression` 属性的值，这个值即一个[方法表达式](Flowable-API.md#方法表达式)
 * 通过指定 `serviceTask` 标签的 `flowable:expression` 属性的值，这个值即一个[值表达式](Flowable-API.md#值表达式)，它会去调用相应的getter方法
 
-// TODO: 下面的待理解
-
-当通过定义在 `serviceTask` 标签里的方法表达式去调用Java逻辑可能会存在耗费更长时间的情况，这时可以返回一个 `CompletableFuture<?>` ，这种情况下其它流也可以同时被执行。
+当通过定义在 `serviceTask` 标签里的方法表达式去调用Java逻辑可能会存在耗费更长时间的情况，这时可以返回一个 `CompletableFuture<?>` ，这种情况下**其它流**也可以同时被执行。
 
 // TODO: 待验证
 通过指定 `serviceTask` 标签的 `flowable:class` 属性的值的方式只会为指定的类创建一个实例。这意味着该类不能有任何成员变量，并需要是线程安全的，因为它可能会在不同线程中同时执行。这也影响了的使用方法。
 
 `flowable:class` 这种方式在部署时不会实例化，只有当流程执行第一次到达该类使用的地方时，才会创建该类的实例，如果找不到这个类则会抛出一个异常。这是因为部署时的classpath与实际运行时的classpath可能不同，例如使用 `ant` 或者业务存档方式部署的流程。
+
+如果执行需要很长时间，可以在不同的线程上委派工作，此时可以执行其它**并行的活动**。为了实现这个目标，你可以实现 `org.flowable.engine.delegate.FutureJavaDelegate` 。但是要注意的是，你要小心设置 `DelegateExecution` 上的数据和事务边界。（ `AsyncTaskInvoker` 里面没有事务，并且不能使用执行， `AsyncTaskInvoker` 外的事务和流程实例的事务是同一个，可以使用执行）
+
+上面的执行并行的流或其它并行的活动的意思是：
+
+默认的并行的流或并行的活动，比如并行网关引出的多个顺序流路径上的活动，这是一种假并行，flowable只会让一个任务执行完后再继续执行下一个任务。这样做的原因是收事务的影响，flowable的事务是从一个等待状态持续到下一个等待状态，这样做的代价就是它的执行是单线程的。而使用 `FutureJavaDelegate` 后，这才在某种程度上更接近并行执行。更详细的描述可以参考[这篇文章](https://blog.flowable.org/2020/08/06/true-parallel-service-task-execution-with-flowable/)，或者看下面这个例子：
+
+```xml
+<definitions id="definitions"
+             xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="Examples">
+
+    <process id="futureJavaDelegate">
+
+        <startEvent id="start" />
+
+        <sequenceFlow sourceRef="start" targetRef="fork" />
+
+        <parallelGateway id="fork" />
+
+        <sequenceFlow sourceRef="fork" targetRef="longRunningJavaDelegate" />
+
+        <!--真并行-->
+<!--        <serviceTask id="longRunningJavaDelegate" name="Important task" flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.LongRunningFutureJavaDelegate" />-->
+        <!--假并行-->
+        <serviceTask id="longRunningJavaDelegate" name="Important task" flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.LongRunningJavaDelegate" />
+
+        <sequenceFlow sourceRef="longRunningJavaDelegate" targetRef="join" />
+
+        <sequenceFlow sourceRef="fork" targetRef="toUpperCase" />
+
+        <serviceTask id="toUpperCase" name="Important task" flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.ToUppercase" />
+
+        <sequenceFlow sourceRef="toUpperCase" targetRef="join" />
+
+        <parallelGateway id="join" />
+
+        <sequenceFlow sourceRef="join" targetRef="end" />
+
+        <endEvent id="end" />
+
+    </process>
+
+</definitions>
+```
+
+上面的流程定义中注释掉的服务任务是使用 `FutureJavaDelegate` 接口的，没注释掉的服务任务是使用普通的 `JavaDelegate` 接口的，它们执行的结果完全不相同。
+
+`FutureJavaDelegate` 的两个子接口 `FlowableFutureJavaDelegate` 和 `MapBasedFlowableFutureJavaDelegate` 可以简化实现：
+
+* `org.flowable.engine.delegate.FlowableFutureJavaDelegate` 会使用默认的或者配置的 `AsyncTaskInvoker` 简化逻辑
+* `org.flowable.engine.delegate.MapBasedFlowableFutureJavaDelegate` 会为输入使用 `ReadOnlyDelegateExecution` ，会为输出使用 `Map` ，以此简化输入输出的传递
+
+对 `JavaDelegate` 和 `FutureJavaDelegate` 有相同的规则和逻辑。注意当在表达式的执行上使用字段注入时，需要同一个流程实例的同一个线程上，并且需要在执行执行前或执行执行后。
+
+实现了 `org.flowable.engine.impl.delegate.ActivityBehavior` 接口的类可以访问更强大的引擎功能。例如，可以影响流程的控制流程。
