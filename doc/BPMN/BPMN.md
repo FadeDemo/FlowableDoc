@@ -2875,8 +2875,78 @@ public class Normal {
 `FutureJavaDelegate` 的两个子接口 `FlowableFutureJavaDelegate` 和 `MapBasedFlowableFutureJavaDelegate` 可以简化实现：
 
 * `org.flowable.engine.delegate.FlowableFutureJavaDelegate` 会使用默认的或者配置的 `AsyncTaskInvoker` 简化逻辑
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask;
+
+import org.flowable.engine.delegate.DelegateExecution;
+import org.flowable.engine.delegate.FlowableFutureJavaDelegate;
+
+/**
+ * @author fade
+ * @date 2021/10/29
+ */
+public class FlowableFutureJavaDelegateExample implements FlowableFutureJavaDelegate<String, String> {
+
+    @Override
+    public String prepareExecutionData(DelegateExecution execution) {
+        return (String) execution.getVariable("input");
+    }
+
+    @Override
+    public String execute(String inputData) {
+        return inputData.toUpperCase();
+    }
+
+    @Override
+    public void afterExecution(DelegateExecution execution, String executionData) {
+        execution.setVariable("input", executionData);
+    }
+
+}
+```
+
+上面的例子实现的功能和 `ToUppercase` 是一样的，里面的 `execute` 方法即 `AsyncTaskInvoker` 执行的内容。
+
 * `org.flowable.engine.delegate.MapBasedFlowableFutureJavaDelegate` 会为输入使用 `ReadOnlyDelegateExecution` ，会为输出使用 `Map` ，以此简化输入输出的传递
 
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask;
+
+import org.flowable.engine.delegate.MapBasedFlowableFutureJavaDelegate;
+import org.flowable.engine.delegate.ReadOnlyDelegateExecution;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * @author fade
+ * @date 2021/10/29
+ */
+public class MapBasedFlowableFutureJavaDelegateExample implements MapBasedFlowableFutureJavaDelegate {
+
+    @Override
+    public Map<String, Object> execute(ReadOnlyDelegateExecution inputData) {
+        String input = (String) inputData.getVariable("input");
+        input = input.toUpperCase();
+        HashMap<String, Object> result = new HashMap<>(16);
+        result.put("input", input);
+        return result;
+    }
+
+}
+```
+
+上面的示例的功能也是和 `ToUppercase` 是一样的，里面的 `execute` 方法即 `AsyncTaskInvoker` 执行的内容，但是不同的是 `execute` 方法的参数 `inputData` 是执行的只读快照，并且 `MapBasedFlowableFutureJavaDelegate` 不需要你自己将需要的值作为流程变量保存在执行中，这项工作会由 `MapBasedFlowableFutureJavaDelegate` 的 `afterExecution` 方法的默认实现来完成，我们要做的只是将需要的值存放在 `Map` 中作为执行的结果返回。
+
+// TODO: 补充示例
 对 `JavaDelegate` 和 `FutureJavaDelegate` 有相同的规则和逻辑。注意当在表达式的执行上使用字段注入时，需要同一个流程实例的同一个线程上，并且需要在执行执行前或执行执行后。
 
 实现了 `org.flowable.engine.impl.delegate.ActivityBehavior` 接口的类可以访问更强大的引擎功能。例如，可以影响流程的控制流程。
+
+flowable支持为委托类的字段注入值，它支持下面这些类型的注入：
+
+* 字符串常量
+* 表达式
+
+如果你的委托类中有公有的setter方法，那么会通过setter来注入值；如果你的委托类中没有可用的setter方法，
