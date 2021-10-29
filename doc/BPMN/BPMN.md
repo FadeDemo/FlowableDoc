@@ -2763,12 +2763,61 @@ public class ThrowsExceptionBehavior implements ActivityBehavior {
 
 * 通过指定 `serviceTask` 标签的 `flowable:delegateExpression` 属性的值，这个值必须是实现了 `JavaDelegate` 、 `FutureJavaDelegate` 或 `ActivityBehavior` 接口的类的实例，可以是流程变量，也可以是Spring Bean
 
+注意当通过流程变量方式设置 `flowable:delegateExpression` 属性的值时，这个值的类除了要实现上面所说的接口，还需要实现 `java.io.Serializable` 接口。而通过Spring Bean的方式设置则不需要。
 
+```xml
+<!--测试通过flowable:delegateExpression调用Java逻辑-->
+<serviceTask id="theTask" name="Important task" flowable:delegateExpression="#{toUppercase}" />
+```
 
 * 通过指定 `serviceTask` 标签的 `flowable:expression` 属性的值，这个值即一个[方法表达式](Flowable-API.md#方法表达式)
+
+通过设置 `flowable:expression` 属性值的这种方式，这个属性的值无需像 `flowable:delegateExpression` 一样必须继承一些接口。被调用方法的变量同样也可以是流程变量或Spring Bean，当变量是流程变量时，该变量所属的类也要实现 `java.io.Serializable` 接口。
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask;
+
+import org.flowable.engine.delegate.DelegateExecution;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.Serializable;
+
+/**
+ * @author fade
+ * @date 2021/10/29
+ */
+//测试通过flowable:expression调用Java逻辑
+// 流程变量方式
+//public class Normal implements Serializable {
+public class Normal {
+
+    private static final Logger logger = LoggerFactory.getLogger(Normal.class);
+
+    public void execute(DelegateExecution execution) {
+        String var = (String) execution.getVariable("input");
+        logger.info("input:" + var);
+        var = var.toUpperCase();
+        execution.setVariable("input", var);
+        logger.info("ToUppercase执行完成");
+    }
+
+}
+```
+
+```xml
+<!--测试通过flowable:expression调用Java逻辑-->
+<!--方法表达式方式-->
+<serviceTask id="theTask" name="Important task" flowable:expression="#{normal.execute(execution)}" />
+```
+
 * 通过指定 `serviceTask` 标签的 `flowable:expression` 属性的值，这个值即一个[值表达式](Flowable-API.md#值表达式)，它会去调用相应的getter方法
 
+// TODO: 补充示例
+
 当通过定义在 `serviceTask` 标签里的方法表达式去调用Java逻辑可能会存在耗费更长时间的情况，这时可以返回一个 `CompletableFuture<?>` ，这种情况下**其它流**也可以同时被执行。
+
+// TODO: 补充示例
 
 // TODO: 待验证
 通过指定 `serviceTask` 标签的 `flowable:class` 属性的值的方式只会为指定的类创建一个实例。这意味着该类不能有任何成员变量，并需要是线程安全的，因为它可能会在不同线程中同时执行。这也影响了的使用方法。
