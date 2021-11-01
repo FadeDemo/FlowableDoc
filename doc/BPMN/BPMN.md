@@ -2939,14 +2939,104 @@ public class MapBasedFlowableFutureJavaDelegateExample implements MapBasedFlowab
 
 上面的示例的功能也是和 `ToUppercase` 是一样的，里面的 `execute` 方法即 `AsyncTaskInvoker` 执行的内容，但是不同的是 `execute` 方法的参数 `inputData` 是执行的只读快照，并且 `MapBasedFlowableFutureJavaDelegate` 不需要你自己将需要的值作为流程变量保存在执行中，这项工作会由 `MapBasedFlowableFutureJavaDelegate` 的 `afterExecution` 方法的默认实现来完成，我们要做的只是将需要的值存放在 `Map` 中作为执行的结果返回。
 
-// TODO: 补充示例
+// TODO: 待理解
+
 对 `JavaDelegate` 和 `FutureJavaDelegate` 有相同的规则和逻辑。注意当在表达式的执行上使用字段注入时，需要同一个流程实例的同一个线程上，并且需要在执行执行前或执行执行后。
 
 实现了 `org.flowable.engine.impl.delegate.ActivityBehavior` 接口的类可以访问更强大的引擎功能。例如，可以影响流程的控制流程。
 
-flowable支持为委托类的字段注入值，它支持下面这些类型的注入：
+flowable支持为委托类的字段注入值，它支持下面这些类型（类型指的是流程定义里注入的类型，不是字段的类型）的注入：
 
 * 字符串常量
 * 表达式
 
-如果你的委托类中有公有的setter方法，那么会通过setter来注入值；如果你的委托类中没有可用的setter方法，
+如果你的委托类中有公有的setter方法，那么会通过setter来注入值；如果你的委托类中没有可用的setter方法，委托类中私有成员变量的值将会被设置。在某些环境下， `SecurityManager` 不允许修改私有成员变量，所以对于你想注入的字段来说，暴露一个公有的setter方法更安全。
+
+// TODO: 修改官方文档
+
+无论在流程定义中声明的是什么类型的值，setter方法参数的类型和私有成员变量的类型总是 `org.flowable.common.engine.api.delegate.Expression` 。表达式在被解析后，会被转换为合适的类型。
+
+Java服务任务支持在通过 `flowable:class` 或 `flowable:delegateExpression` 调用Java逻辑时使用字段注入，但考虑到线程安全，需要遵循特殊的规则。
+
+字段注入在流程定义中的表现形式一般为 `extensionElements` 标签里包含着一个 `flowable:field` 标签。
+
+例子：
+
+```java
+package org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask;
+
+import org.flowable.common.engine.api.async.AsyncTaskInvoker;
+import org.flowable.common.engine.api.delegate.Expression;
+import org.flowable.engine.delegate.DelegateExecution;
+import org.flowable.engine.delegate.FutureJavaDelegate;
+
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * @author fade
+ * @date 2021/11/01
+ */
+public class FieldInjectDelegate implements FutureJavaDelegate<Object> {
+
+    private Expression text;
+
+    public void setText(Expression text) {
+        this.text = text;
+    }
+
+    @Override
+    public CompletableFuture<Object> execute(DelegateExecution execution, AsyncTaskInvoker taskInvoker) {
+        String input = (String) text.getValue(execution);
+        return taskInvoker.submit(() -> input.toUpperCase());
+    }
+
+    @Override
+    public void afterExecution(DelegateExecution execution, Object executionData) {
+        execution.setVariable("text", executionData);
+    }
+
+}
+```
+
+```xml
+<serviceTask id="theTask" name="Important task" flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.FieldInjectDelegate">
+  <extensionElements>
+    <flowable:field name="text" stringValue="abcDEFghi" />
+  </extensionElements>
+</serviceTask>
+```
+
+上面示例中的 `stringValue` 属性也可以以 `flowable:string` 子标签的形式代替。
+
+```xml
+<serviceTask id="theTask" name="Important task" flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.FieldInjectDelegate">
+  <extensionElements>
+    <flowable:field name="text">
+      <flowable:string>abcDEFghi</flowable:string>
+    </flowable:field>
+  </extensionElements>
+</serviceTask>
+```
+
+为了在运行时注入动态解析的值，可以使用表达式，表达式的使用可以参考[前面的章节](Flowable-API.md#表达式)。当使用 `flowable:class` 调用Java逻辑时，由于 `flowable:class` 指定的类是单实例的，要动态地为字段注入值，你可以在 `org.flowable.common.engine.api.delegate.Expression` 中注入值和方法表达式，它们会通过 `execute` 方法传递的 `DelegateExecution` 被计算或被调用。
+
+```xml
+<serviceTask id="theTask" name="Important task" flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.FieldInjectDelegate">
+  <extensionElements>
+    <flowable:field name="text">
+      <flowable:expression>#{input}</flowable:expression>
+    </flowable:field>
+  </extensionElements>
+</serviceTask>
+```
+
+上面 `flowable:field` 的子标签 `flowable:expression` 也可以直接用 `flowable:field` 的 `expression` 属性代替。
+
+```xml
+<serviceTask id="theTask" name="Important task" flowable:class="org.fade.demo.flowabledemo.bpmn.constructs.task.javaservicetask.FieldInjectDelegate">
+  <extensionElements>
+    <flowable:field name="text" expression="#{input}" />
+  </extensionElements>
+</serviceTask>
+```
+
