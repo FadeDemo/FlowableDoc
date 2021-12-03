@@ -16,3 +16,9 @@
 |2-3|[Flowable API](https://github.com/FadeDemo/FlowableDoc/blob/main/doc/BPMN/Flowable-API.md)|
 |2-4|[部署](https://github.com/FadeDemo/FlowableDoc/blob/main/doc/BPMN/%E9%83%A8%E7%BD%B2.md)|
 |2-5|[集成Spring](https://github.com/FadeDemo/FlowableDoc/blob/main/doc/BPMN/%E9%9B%86%E6%88%90Spring.md)|
+|2-6|[集成Spring Boot](https://github.com/FadeDemo/FlowableDoc/blob/main/doc/BPMN/%E9%9B%86%E6%88%90Spring-Boot.md)|
+|2-7|[BPMN 2.0](https://github.com/FadeDemo/FlowableDoc/blob/main/doc/BPMN/BPMN.md)|
+
+### 对应代码的地址
+
+https://github.com/FadeDemo/FlowableDemo
