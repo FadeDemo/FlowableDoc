@@ -15,3 +15,4 @@
 |2-2|[配置](https://github.com/FadeDemo/FlowableDoc/blob/main/doc/BPMN/%E9%85%8D%E7%BD%AE.md)|
 |2-3|[Flowable API](https://github.com/FadeDemo/FlowableDoc/blob/main/doc/BPMN/Flowable-API.md)|
 |2-4|[部署](https://github.com/FadeDemo/FlowableDoc/blob/main/doc/BPMN/%E9%83%A8%E7%BD%B2.md)|
+|2-5|[集成Spring](https://github.com/FadeDemo/FlowableDoc/blob/main/doc/BPMN/%E9%9B%86%E6%88%90Spring.md)|
