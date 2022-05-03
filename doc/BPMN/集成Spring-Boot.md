@@ -613,21 +613,16 @@ public class MyRestController {
 </dependency>
 ```
 
-flowable为正在运行的流程提供了 `Spring Boot Actuator Endpoint` 。默认情况下flowable的endpoint被映射为 `/actuator/flowable` ，但是Spring Boot默认只暴露 `info` 和 `health` endpoint。为了让flowable的endpoint可以生效，你需要在配置环境中做一些配置：
-
-// FIXME: 官网的 `management.endpoints.web.exposure.include=true` 不生效
+flowable为正在运行的流程提供了 `Spring Boot Actuator Endpoint` 。默认情况下flowable的endpoint被映射为 `/actuator/flowable` ，但是Spring Boot默认只暴露少许endpoint。为了让flowable的endpoint可以生效，你需要在配置环境中做一些配置：
 
 * yml
 
 ```yml
 management:
-#  endpoints:
-#    web:
-#      exposure:
-#        include: '*'
-  endpoint:
-    flowable:
-      enabled: true
+ endpoints:
+   web:
+     exposure:
+       include: '*'
 ```
 
 * properties
